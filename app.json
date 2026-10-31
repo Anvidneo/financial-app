@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Finance",
+    "slug": "personal-finance-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "financeapp",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.juandavidbotero.personalfinance",
+      "supportsTablet": false,
+      "appleTeamId": "7QM8U3K8KN"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1F3A33",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
