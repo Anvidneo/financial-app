@@ -53,6 +53,9 @@ export default function RootLayout() {
           <Stack.Screen name="accounts/index" />
           <Stack.Screen name="accounts/form" options={{ presentation: 'modal' }} />
           <Stack.Screen name="categories" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="add" options={{ animation: 'none' }} />
+          <Stack.Screen name="quick/[id]" options={{ animation: 'none' }} />
           <Stack.Screen name="card/form" options={{ presentation: 'modal' }} />
           <Stack.Screen name="card/[id]" />
           <Stack.Screen name="recurring/form" options={{ presentation: 'modal' }} />

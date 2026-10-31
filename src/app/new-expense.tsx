@@ -28,16 +28,22 @@ import { syncReminders } from '@/lib/reminders';
 export default function NewExpenseScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    merchant?: string;
+    payment?: PaymentMethod;
+  }>();
   const id = params.id ? Number(params.id) : null;
   const today = toDay(new Date());
   const [amountCop, setAmountCop] = useState(0);
-  const [merchant, setMerchant] = useState('');
+  const [merchant, setMerchant] = useState(params.merchant ?? '');
   const [spentOn, setSpentOn] = useState(today);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(
+    params.payment ?? 'cash',
+  );
   const [debitCards, setDebitCards] = useState<DebitCard[]>([]);
   const [cardId, setCardId] = useState<number | null>(null);
   const [debitCardId, setDebitCardId] = useState<number | null>(null);

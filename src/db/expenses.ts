@@ -81,8 +81,8 @@ export function getExpense(db: SQLiteDatabase, id: number): Promise<Expense | nu
   return db.getFirstAsync<Expense>(`${SELECT_EXPENSE} WHERE e.id = ?`, id);
 }
 
-export async function addExpense(db: SQLiteDatabase, expense: NewExpense): Promise<void> {
-  await db.runAsync(
+export async function addExpense(db: SQLiteDatabase, expense: NewExpense): Promise<number> {
+  const result = await db.runAsync(
     `INSERT INTO expenses
        (merchant, amount_cop, category_id, spent_on, payment_method, card_id, debit_card_id,
         installments)
@@ -96,6 +96,7 @@ export async function addExpense(db: SQLiteDatabase, expense: NewExpense): Promi
     expense.debitCardId,
     expense.installments,
   );
+  return result.lastInsertRowId;
 }
 
 export async function updateExpense(
@@ -158,4 +159,50 @@ export async function listMonthTotals(
     categoryId,
   );
   return months.map((month) => rows.find((row) => row.month === month)?.totalCop ?? 0);
+}
+
+export function listAllExpenses(db: SQLiteDatabase): Promise<Expense[]> {
+  return db.getAllAsync<Expense>(`${SELECT_EXPENSE} ORDER BY e.spent_on DESC, e.id DESC`);
+}
+
+export async function setExpenseCategory(
+  db: SQLiteDatabase,
+  id: number,
+  categoryId: number,
+): Promise<void> {
+  await db.runAsync('UPDATE expenses SET category_id = ? WHERE id = ?', categoryId, id);
+}
+
+// A merchant keeps the category it had last time.
+export async function guessCategoryId(
+  db: SQLiteDatabase,
+  merchant: string,
+): Promise<number | null> {
+  const row = await db.getFirstAsync<{ categoryId: number }>(
+    `SELECT category_id AS categoryId FROM expenses
+     WHERE merchant = ? COLLATE NOCASE
+     ORDER BY id DESC
+     LIMIT 1`,
+    merchant,
+  );
+  if (row) return row.categoryId;
+  return (await listCategories(db))[0]?.id ?? null;
+}
+
+// The same link arriving twice within two minutes is one payment, not two.
+export async function findRecentExpense(
+  db: SQLiteDatabase,
+  merchant: string,
+  amountCop: number,
+): Promise<number | null> {
+  const row = await db.getFirstAsync<{ id: number }>(
+    `SELECT id FROM expenses
+     WHERE merchant = ? COLLATE NOCASE AND amount_cop = ?
+       AND created_at >= datetime('now', '-2 minutes')
+     ORDER BY id DESC
+     LIMIT 1`,
+    merchant,
+    amountCop,
+  );
+  return row?.id ?? null;
 }

@@ -56,13 +56,22 @@ export default function HomeScreen() {
             Juan
           </Text>
         </View>
-        <PressableScale
-          accessibilityLabel="Accounts"
-          accessibilityRole="button"
-          onPress={() => router.push('/accounts')}
-          style={styles.headerButton}>
-          <SymbolView name="building.columns" size={20} tintColor={colors.ink} />
-        </PressableScale>
+        <View style={styles.headerButtons}>
+          <PressableScale
+            accessibilityLabel="Accounts"
+            accessibilityRole="button"
+            onPress={() => router.push('/accounts')}
+            style={styles.headerButton}>
+            <SymbolView name="building.columns" size={20} tintColor={colors.ink} />
+          </PressableScale>
+          <PressableScale
+            accessibilityLabel="Settings"
+            accessibilityRole="button"
+            onPress={() => router.push('/settings')}
+            style={styles.headerButton}>
+            <SymbolView name="gearshape" size={20} tintColor={colors.ink} />
+          </PressableScale>
+        </View>
       </View>
 
       <Wallet
@@ -161,6 +170,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: colors.ink,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
   headerButton: {
     width: 44,

@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 // Append only. Each entry runs once, in order, and user_version records the last one applied.
 // Editing a shipped migration would leave the phone's data out of step with the code.
-const MIGRATIONS = [
+export const MIGRATIONS = [
   `
   CREATE TABLE categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
