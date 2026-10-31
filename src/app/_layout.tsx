@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Intro } from '@/components/intro';
 import { ScreenSkeleton } from '@/components/skeleton';
 import { colors } from '@/constants/theme';
 import { postDueCharges } from '@/db/recurring';
@@ -89,6 +90,7 @@ export default function RootLayout() {
       <ChargeSync>
         <Screens />
       </ChargeSync>
+      <Intro />
     </SQLiteProvider>
   );
 }

@@ -5,10 +5,12 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
   withSpring,
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { msUntilReveal } from '@/components/intro';
 import { colors, radius } from '@/constants/theme';
 import { formatCop } from '@/lib/money';
 
@@ -47,7 +49,7 @@ export function Wallet({ items, hasAccounts, totalCop, onEmptyPress }: Props) {
 
   // Cards rise out of the pocket once when Home opens, then only when tapped.
   useEffect(() => {
-    lift.set(withSpring(RAISED, SPRING));
+    lift.set(withDelay(msUntilReveal(), withSpring(RAISED, SPRING)));
   }, [lift]);
 
   function toggle() {
