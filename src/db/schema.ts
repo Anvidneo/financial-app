@@ -57,6 +57,41 @@ const MIGRATIONS = [
   UPDATE recurring
   SET last_posted_on = (SELECT MAX(e.spent_on) FROM expenses e WHERE e.recurring_id = recurring.id);
   `,
+  `
+  CREATE TABLE cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    last_four TEXT NOT NULL,
+    limit_cop INTEGER NOT NULL CHECK (limit_cop > 0),
+    cut_off_day INTEGER NOT NULL CHECK (cut_off_day BETWEEN 1 AND 31),
+    payment_day INTEGER NOT NULL CHECK (payment_day BETWEEN 1 AND 31)
+  );
+
+  CREATE TABLE card_statements (
+    card_id INTEGER NOT NULL REFERENCES cards (id),
+    cut_off_on TEXT NOT NULL,
+    minimum_cop INTEGER,
+    paid_on TEXT,
+    PRIMARY KEY (card_id, cut_off_on)
+  );
+
+  ALTER TABLE expenses ADD COLUMN card_id INTEGER REFERENCES cards (id);
+  ALTER TABLE expenses ADD COLUMN installments INTEGER NOT NULL DEFAULT 1;
+  `,
+  `
+  ALTER TABLE expenses ADD COLUMN payment_method TEXT;
+
+  UPDATE expenses SET payment_method = 'card' WHERE card_id IS NOT NULL;
+  `,
+  `
+  CREATE TABLE debit_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    last_four TEXT NOT NULL
+  );
+
+  ALTER TABLE expenses ADD COLUMN debit_card_id INTEGER REFERENCES debit_cards (id);
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

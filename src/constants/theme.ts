@@ -9,6 +9,7 @@ export const colors = {
   lime: '#A6E36B',
   recurring: '#2360D9',
   danger: '#A82C2C',
+  credit: '#2F6FED',
 };
 
 export const radius = {

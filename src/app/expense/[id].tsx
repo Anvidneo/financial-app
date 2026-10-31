@@ -9,8 +9,11 @@ import { CategoryTile } from '@/components/category-tile';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { deleteExpense, getExpense, type Expense } from '@/db/expenses';
+import { buildSchedule } from '@/lib/cards';
 import { formatDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
+import { paymentLabel } from '@/lib/payment';
+import { syncReminders } from '@/lib/reminders';
 
 export default function ExpenseDetailScreen() {
   const db = useSQLiteContext();
@@ -27,6 +30,16 @@ export default function ExpenseDetailScreen() {
 
   if (!expense) return <View style={styles.screen} />;
 
+  const schedule =
+    expense.cardCutOffDay !== null && expense.cardPaymentDay !== null
+      ? buildSchedule(expense.amountCop, expense.installments, expense.spentOn, {
+          cutOffDay: expense.cardCutOffDay,
+          paymentDay: expense.cardPaymentDay,
+        })
+      : null;
+
+  const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
+
   function confirmDelete() {
     Alert.alert(
       `Delete ${expense?.merchant}?`,
@@ -40,6 +53,7 @@ export default function ExpenseDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             await deleteExpense(db, id);
+            await syncReminders(db);
             router.back();
           },
         },
@@ -91,10 +105,30 @@ export default function ExpenseDetailScreen() {
           <Text style={styles.label}>Category</Text>
           <Text style={styles.value}>{expense.categoryName}</Text>
         </View>
-        <View style={styles.detail}>
+        <View style={[styles.detail, (paid || schedule) && styles.divider]}>
           <Text style={styles.label}>Date</Text>
           <Text style={styles.value}>{formatDay(expense.spentOn)}</Text>
         </View>
+        {paid && (
+          <View style={[styles.detail, schedule && styles.divider]}>
+            <Text style={styles.label}>Paid with</Text>
+            <Text style={styles.value}>{paid}</Text>
+          </View>
+        )}
+        {schedule && (
+          <>
+            <View style={[styles.detail, styles.divider]}>
+              <Text style={styles.label}>Installments</Text>
+              <Text style={styles.value}>
+                {expense.installments} × {formatCop(schedule[schedule.length - 1].amountCop)}
+              </Text>
+            </View>
+            <View style={styles.detail}>
+              <Text style={styles.label}>First due</Text>
+              <Text style={styles.value}>{formatDay(schedule[0].dueOn)}</Text>
+            </View>
+          </>
+        )}
       </View>
 
       <View style={styles.spacer} />

@@ -1,12 +1,14 @@
 import * as Notifications from 'expo-notifications';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { listCards } from '@/db/cards';
 import { listRecurring } from '@/db/recurring';
 import { planReminders } from '@/lib/billing';
-import { formatDay, toDay } from '@/lib/dates';
+import { addDays, formatDay, toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 
 const REMINDER_HOUR = 9;
+const CARD_REMIND_DAYS = 3;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -46,16 +48,34 @@ async function replaceSchedule(db: SQLiteDatabase): Promise<void> {
   const recurring = await listRecurring(db, today);
 
   for (const reminder of planReminders(recurring, today)) {
-    const [year, month, day] = reminder.remindOn.split('-').map(Number);
-    const date = new Date(year, month - 1, day, REMINDER_HOUR);
-    if (date <= now) continue;
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `${reminder.name} charges ${formatDay(reminder.chargeDay)}`,
-        body: `${formatCop(reminder.amountCop)}. Cancel it or fund the account.`,
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date },
-    });
+    await schedule(
+      reminder.remindOn,
+      now,
+      `${reminder.name} charges ${formatDay(reminder.chargeDay)}`,
+      `${formatCop(reminder.amountCop)}. Cancel it or fund the account.`,
+    );
   }
+
+  for (const card of await listCards(db, today)) {
+    const { balanceCop, dueOn } = card.statement;
+    if (balanceCop === 0) continue;
+
+    await schedule(
+      addDays(dueOn, -CARD_REMIND_DAYS),
+      now,
+      `${card.name} ${card.lastFour} payment due ${formatDay(dueOn)}`,
+      `${formatCop(balanceCop)} on this statement.`,
+    );
+  }
+}
+
+async function schedule(remindOn: string, now: Date, title: string, body: string): Promise<void> {
+  const [year, month, day] = remindOn.split('-').map(Number);
+  const date = new Date(year, month - 1, day, REMINDER_HOUR);
+  if (date <= now) return;
+
+  await Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date },
+  });
 }

@@ -14,6 +14,7 @@ export default function TabsLayout() {
       }}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="recurring" />
+      <Tabs.Screen name="cards" />
     </Tabs>
   );
 }

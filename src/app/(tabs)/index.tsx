@@ -12,6 +12,7 @@ import { colors, radius } from '@/constants/theme';
 import { listCategories, listExpenses, type Category, type Expense } from '@/db/expenses';
 import { addMonths, formatDay, formatMonth, toDay, toMonth } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
+import { paymentLabel } from '@/lib/payment';
 
 export default function ExpensesScreen() {
   const db = useSQLiteContext();
@@ -139,6 +140,8 @@ function ExpenseRow({
   first: boolean;
   last: boolean;
 }) {
+  const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
+
   return (
     <PressableScale
       accessibilityRole="button"
@@ -156,6 +159,7 @@ function ExpenseRow({
           </Text>
           <Text style={styles.rowDetail}>
             {expense.categoryName}
+            {paid ? ` · ${paid}` : ''}
             {expense.recurring ? <Text style={styles.recurring}> · Recurring</Text> : null}
           </Text>
         </View>
