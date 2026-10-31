@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   key: {
-    flexBasis: '32%',
+    flexBasis: '30%',
     flexGrow: 1,
     height: 52,
     borderRadius: radius.control,

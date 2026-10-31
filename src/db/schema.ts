@@ -51,6 +51,12 @@ const MIGRATIONS = [
     ON expenses (recurring_id, spent_on)
     WHERE recurring_id IS NOT NULL;
   `,
+  `
+  ALTER TABLE recurring ADD COLUMN last_posted_on TEXT;
+
+  UPDATE recurring
+  SET last_posted_on = (SELECT MAX(e.spent_on) FROM expenses e WHERE e.recurring_id = recurring.id);
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

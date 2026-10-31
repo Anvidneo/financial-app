@@ -16,6 +16,7 @@ type RecurringRow = {
   remindDays: number;
   remindersOn: number;
   startsOn: string;
+  lastPostedOn: string | null;
   lastPaidOn: string | null;
 };
 
@@ -45,12 +46,13 @@ const SELECT_RECURRING = `
          c.color AS categoryColor, c.tint AS categoryTint,
          r.billing_day AS billingDay, r.remind_days AS remindDays,
          r.reminders_on AS remindersOn, r.starts_on AS startsOn,
+         r.last_posted_on AS lastPostedOn,
          (SELECT MAX(e.spent_on) FROM expenses e WHERE e.recurring_id = r.id) AS lastPaidOn
   FROM recurring r
   JOIN categories c ON c.id = r.category_id`;
 
 function toRecurring(row: RecurringRow, today: string): Recurring {
-  const after = latestDay(addDays(today, -1), row.startsOn, row.lastPaidOn);
+  const after = latestDay(addDays(today, -1), row.startsOn, row.lastPostedOn);
   return {
     ...row,
     remindersOn: row.remindersOn === 1,
@@ -133,14 +135,16 @@ export function listCharges(db: SQLiteDatabase, id: number): Promise<RecurringCh
   );
 }
 
-// Registers every charge whose day has passed. The unique index keeps a second run harmless.
+// Registers every charge whose day has passed. last_posted_on remembers the newest one, so a
+// charge deleted from the history is not registered again. The unique index keeps a repeat harmless.
 export async function postDueCharges(db: SQLiteDatabase, today: string): Promise<void> {
   const items = await db.getAllAsync<RecurringRow>(`${SELECT_RECURRING} WHERE r.active = 1`);
 
   await db.withTransactionAsync(async () => {
     for (const item of items) {
-      const after = latestDay(item.startsOn, item.lastPaidOn);
-      for (const day of chargesThrough(item.billingDay, after, today)) {
+      const after = latestDay(item.startsOn, item.lastPostedOn);
+      const charges = chargesThrough(item.billingDay, after, today);
+      for (const day of charges) {
         await db.runAsync(
           `INSERT OR IGNORE INTO expenses (merchant, amount_cop, category_id, spent_on, recurring_id)
            VALUES (?, ?, ?, ?, ?)`,
@@ -148,6 +152,13 @@ export async function postDueCharges(db: SQLiteDatabase, today: string): Promise
           item.amountCop,
           item.categoryId,
           day,
+          item.id,
+        );
+      }
+      if (charges.length > 0) {
+        await db.runAsync(
+          'UPDATE recurring SET last_posted_on = ? WHERE id = ?',
+          charges[charges.length - 1],
           item.id,
         );
       }

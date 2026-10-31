@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useMemo, useState } from 'react';
@@ -140,7 +140,10 @@ function ExpenseRow({
   last: boolean;
 }) {
   return (
-    <View style={[styles.row, first && styles.rowFirst, last && styles.rowLast]}>
+    <PressableScale
+      accessibilityRole="button"
+      onPress={() => router.push(`/expense/${expense.id}`)}
+      style={[styles.row, first && styles.rowFirst, last && styles.rowLast]}>
       <View style={[styles.rowInner, !last && styles.rowDivider]}>
         <CategoryTile
           icon={expense.categoryIcon}
@@ -161,7 +164,7 @@ function ExpenseRow({
           <Text style={styles.rowDetail}>{formatDay(expense.spentOn)}</Text>
         </View>
       </View>
-    </View>
+    </PressableScale>
   );
 }
 

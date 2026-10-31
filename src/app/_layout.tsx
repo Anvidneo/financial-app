@@ -49,6 +49,7 @@ export default function RootLayout() {
           }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="new-expense" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="expense/[id]" />
           <Stack.Screen name="recurring/form" options={{ presentation: 'modal' }} />
           <Stack.Screen name="recurring/[id]" />
         </Stack>

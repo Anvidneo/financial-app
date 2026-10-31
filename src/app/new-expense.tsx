@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
@@ -9,13 +9,21 @@ import { Chip } from '@/components/chip';
 import { Keypad } from '@/components/keypad';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
-import { addExpense, listCategories, type Category } from '@/db/expenses';
+import {
+  addExpense,
+  getExpense,
+  listCategories,
+  updateExpense,
+  type Category,
+} from '@/db/expenses';
 import { addDays, formatRelativeDay, toDay } from '@/lib/dates';
 import { appendDigits, formatCop, removeLastDigit } from '@/lib/money';
 
 export default function NewExpenseScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const id = params.id ? Number(params.id) : null;
   const today = toDay(new Date());
   const [amountCop, setAmountCop] = useState(0);
   const [merchant, setMerchant] = useState('');
@@ -27,9 +35,18 @@ export default function NewExpenseScreen() {
   useEffect(() => {
     listCategories(db).then((rows) => {
       setCategories(rows);
-      setCategoryId(rows[0]?.id ?? null);
+      if (id === null) setCategoryId(rows[0]?.id ?? null);
     });
-  }, [db]);
+    if (id === null) return;
+
+    getExpense(db, id).then((expense) => {
+      if (!expense) return;
+      setAmountCop(expense.amountCop);
+      setMerchant(expense.merchant);
+      setSpentOn(expense.spentOn);
+      setCategoryId(expense.categoryId);
+    });
+  }, [db, id]);
 
   const canSave = amountCop > 0 && merchant.trim().length > 0 && categoryId !== null && !saving;
 
@@ -37,7 +54,12 @@ export default function NewExpenseScreen() {
     if (!canSave || categoryId === null) return;
     setSaving(true);
     try {
-      await addExpense(db, { merchant, amountCop, categoryId, spentOn });
+      const expense = { merchant, amountCop, categoryId, spentOn };
+      if (id === null) {
+        await addExpense(db, expense);
+      } else {
+        await updateExpense(db, id, expense);
+      }
       router.back();
     } catch {
       setSaving(false);
@@ -56,7 +78,7 @@ export default function NewExpenseScreen() {
           <SymbolView name="xmark" size={16} tintColor={colors.ink} />
         </PressableScale>
         <Text accessibilityRole="header" style={styles.title}>
-          New expense
+          {id === null ? 'New expense' : 'Edit expense'}
         </Text>
         <View style={styles.close} />
       </View>
@@ -139,7 +161,9 @@ export default function NewExpenseScreen() {
         disabled={!canSave}
         onPress={save}
         style={[styles.save, !canSave && styles.saveDisabled]}>
-        <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>Save expense</Text>
+        <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>
+          {id === null ? 'Save expense' : 'Save changes'}
+        </Text>
       </PressableScale>
     </View>
   );
@@ -232,6 +256,7 @@ const styles = StyleSheet.create({
   },
   chipScroller: {
     flexGrow: 0,
+    flexShrink: 0,
     marginHorizontal: -20,
   },
   chips: {
