@@ -11,13 +11,16 @@ type Backup = {
 // Parents first, so a restore inserts in this order and deletes in reverse.
 const TABLES = [
   'categories',
+  'accounts',
   'debit_cards',
   'cards',
-  'accounts',
   'recurring',
   'expenses',
   'card_statements',
+  'card_payments',
+  'settings',
 ];
+const REQUIRED_TABLES = ['categories', 'expenses', 'recurring', 'cards'];
 
 async function schemaVersion(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -43,7 +46,7 @@ function parseBackup(text: string): Backup {
   if (backup.app !== 'finance' || !backup.tables) {
     throw new Error('This file is not a Finance backup.');
   }
-  if (TABLES.some((table) => !Array.isArray(backup.tables?.[table]))) {
+  if (REQUIRED_TABLES.some((table) => !Array.isArray(backup.tables?.[table]))) {
     throw new Error('This backup is incomplete.');
   }
   return backup as Backup;
@@ -52,16 +55,20 @@ function parseBackup(text: string): Backup {
 // Runs in one transaction, so a backup that fails partway leaves the current data untouched.
 export async function restoreBackup(db: SQLiteDatabase, text: string): Promise<void> {
   const backup = parseBackup(text);
-  if (backup.version !== (await schemaVersion(db))) {
-    throw new Error('This backup comes from a different app version.');
+  if (backup.version > (await schemaVersion(db))) {
+    throw new Error('This backup comes from a newer app version. Update the app first.');
   }
+  // Older backups stay usable: columns added since keep their defaults.
+  const tables = TABLES.filter((table) => Array.isArray(backup.tables[table]));
 
   await db.withTransactionAsync(async () => {
     await db.execAsync('PRAGMA defer_foreign_keys = ON');
     for (const table of [...TABLES].reverse()) {
-      await db.runAsync(`DELETE FROM ${table}`);
+      if (table !== 'settings' || tables.includes(table)) {
+        await db.runAsync(`DELETE FROM ${table}`);
+      }
     }
-    for (const table of TABLES) {
+    for (const table of tables) {
       for (const row of backup.tables[table]) {
         const columns = Object.keys(row);
         await db.runAsync(

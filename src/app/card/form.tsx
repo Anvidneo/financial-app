@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip } from '@/components/chip';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
+import { listAccounts, type Account } from '@/db/accounts';
 import {
   addCard,
   addDebitCard,
@@ -18,6 +19,7 @@ import {
   updateCard,
   updateDebitCard,
 } from '@/db/cards';
+import { parseRate } from '@/lib/cards';
 import { toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 import { syncReminders } from '@/lib/reminders';
@@ -43,15 +45,20 @@ export default function CardFormScreen() {
   const [limitCop, setLimitCop] = useState(0);
   const [cutOffDay, setCutOffDay] = useState(0);
   const [paymentDay, setPaymentDay] = useState(0);
+  const [rateText, setRateText] = useState('');
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountId, setAccountId] = useState<number | null>(null);
   const [purchaseCount, setPurchaseCount] = useState(0);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    listAccounts(db).then(setAccounts);
     if (debitId !== null) {
       getDebitCard(db, debitId).then((card) => {
         if (!card) return;
         setName(card.name);
         setLastFour(card.lastFour);
+        setAccountId(card.accountId);
         setPurchaseCount(card.purchaseCount);
       });
     }
@@ -64,6 +71,7 @@ export default function CardFormScreen() {
       setLimitCop(card.limitCop);
       setCutOffDay(card.cutOffDay);
       setPaymentDay(card.paymentDay);
+      if (card.monthlyRate > 0) setRateText(card.monthlyRate.toString());
       setPurchaseCount(card.purchaseCount);
     });
   }, [db, id, debitId]);
@@ -79,12 +87,19 @@ export default function CardFormScreen() {
   async function save() {
     if (!canSave) return;
     setSaving(true);
-    const input = { name, lastFour, limitCop, cutOffDay, paymentDay };
+    const input = {
+      name,
+      lastFour,
+      limitCop,
+      cutOffDay,
+      paymentDay,
+      monthlyRate: parseRate(rateText),
+    };
     try {
       if (debitId !== null) {
-        await updateDebitCard(db, debitId, name, lastFour);
+        await updateDebitCard(db, debitId, name, lastFour, accountId);
       } else if (debit) {
-        await addDebitCard(db, name, lastFour);
+        await addDebitCard(db, name, lastFour, accountId);
       } else if (id === null) {
         await addCard(db, input);
       } else {
@@ -192,7 +207,7 @@ export default function CardFormScreen() {
                 value={cutOffDay > 0 ? cutOffDay.toString() : ''}
               />
             </Field>
-            <Field label="Payment day" last>
+            <Field label="Payment day">
               <TextInput
                 accessibilityLabel="Payment day"
                 keyboardType="number-pad"
@@ -203,9 +218,41 @@ export default function CardFormScreen() {
                 value={paymentDay > 0 ? paymentDay.toString() : ''}
               />
             </Field>
+            <Field label="Monthly interest %" last>
+              <TextInput
+                accessibilityLabel="Monthly interest percent"
+                keyboardType="decimal-pad"
+                onChangeText={setRateText}
+                placeholder="0"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={rateText}
+              />
+            </Field>
           </>
         )}
       </View>
+
+      {debit && accounts.length > 0 && (
+        <>
+          <Text style={styles.section}>Linked account</Text>
+          <View style={styles.types}>
+            <Chip
+              label="None"
+              selected={accountId === null}
+              onPress={() => setAccountId(null)}
+            />
+            {accounts.map((account) => (
+              <Chip
+                key={account.id}
+                label={account.name}
+                selected={accountId === account.id}
+                onPress={() => setAccountId(account.id)}
+              />
+            ))}
+          </View>
+        </>
+      )}
 
       {!debit && (
         <Text style={styles.hint}>
@@ -279,7 +326,13 @@ const styles = StyleSheet.create({
   },
   types: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+  },
+  section: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ink,
   },
   form: {
     backgroundColor: colors.surface,

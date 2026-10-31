@@ -8,9 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip } from '@/components/chip';
 import { InstallmentPicker } from '@/components/installment-picker';
 import { Keypad } from '@/components/keypad';
+import { PaymentPicker, type Payment } from '@/components/payment-picker';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
-import { listCardOptions, listDebitCards, type Card, type DebitCard } from '@/db/cards';
+import type { Card } from '@/db/cards';
 import {
   addExpense,
   getExpense,
@@ -18,10 +19,10 @@ import {
   updateExpense,
   type Category,
 } from '@/db/expenses';
-import { buildSchedule } from '@/lib/cards';
+import { buildSchedule, parseRate } from '@/lib/cards';
 import { addDays, formatDay, formatRelativeDay, toDay } from '@/lib/dates';
 import { appendDigits, formatCop, removeLastDigit } from '@/lib/money';
-import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/payment';
+import type { PaymentMethod } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
 
 
@@ -41,13 +42,14 @@ export default function NewExpenseScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(
-    params.payment ?? 'cash',
-  );
-  const [debitCards, setDebitCards] = useState<DebitCard[]>([]);
-  const [cardId, setCardId] = useState<number | null>(null);
-  const [debitCardId, setDebitCardId] = useState<number | null>(null);
+  const [payment, setPayment] = useState<Payment>({
+    paymentMethod: params.payment ?? 'cash',
+    cardId: null,
+    debitCardId: null,
+    accountId: null,
+  });
   const [installments, setInstallments] = useState(1);
+  const [interestText, setInterestText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -55,8 +57,6 @@ export default function NewExpenseScreen() {
       setCategories(rows);
       if (id === null) setCategoryId(rows[0]?.id ?? null);
     });
-    listCardOptions(db).then(setCards);
-    listDebitCards(db).then(setDebitCards);
     if (id === null) return;
 
     getExpense(db, id).then((expense) => {
@@ -65,10 +65,14 @@ export default function NewExpenseScreen() {
       setMerchant(expense.merchant);
       setSpentOn(expense.spentOn);
       setCategoryId(expense.categoryId);
-      setPaymentMethod(expense.paymentMethod);
-      setCardId(expense.cardId);
-      setDebitCardId(expense.debitCardId);
+      setPayment({
+        paymentMethod: expense.paymentMethod,
+        cardId: expense.cardId,
+        debitCardId: expense.debitCardId,
+        accountId: expense.accountId,
+      });
       setInstallments(expense.installments);
+      if (expense.interestRate > 0) setInterestText(expense.interestRate.toString());
     });
   }, [db, id]);
 
@@ -76,20 +80,20 @@ export default function NewExpenseScreen() {
     amountCop > 0 &&
     merchant.trim().length > 0 &&
     categoryId !== null &&
-    (paymentMethod !== 'card' || cardId !== null) &&
+    (payment.paymentMethod !== 'card' || payment.cardId !== null) &&
     !saving;
 
-  const card = cards.find((option) => option.id === cardId);
+  const card = cards.find((option) => option.id === payment.cardId);
+  const shownRate = interestText ?? (card?.monthlyRate ?? 0).toString();
+  const interestRate = installments > 1 ? parseRate(shownRate) : 0;
   const schedule =
     card && amountCop >= installments
-      ? buildSchedule(amountCop, installments, spentOn, card)
+      ? buildSchedule(amountCop, installments, spentOn, card, interestRate)
       : null;
 
-  function choosePayment(method: PaymentMethod) {
-    setPaymentMethod(method);
-    setCardId(method === 'card' ? (cardId ?? cards[0]?.id ?? null) : null);
-    setDebitCardId(method === 'debit' ? (debitCardId ?? debitCards[0]?.id ?? null) : null);
-    if (method !== 'card') setInstallments(1);
+  function changePayment(next: Payment) {
+    setPayment(next);
+    if (next.paymentMethod !== 'card') setInstallments(1);
   }
 
   async function save() {
@@ -101,10 +105,9 @@ export default function NewExpenseScreen() {
         amountCop,
         categoryId,
         spentOn,
-        paymentMethod,
-        cardId,
-        debitCardId,
-        installments: cardId === null ? 1 : installments,
+        ...payment,
+        installments: payment.cardId === null ? 1 : installments,
+        interestRate: payment.cardId === null ? 0 : interestRate,
       };
       if (id === null) {
         await addExpense(db, expense);
@@ -203,78 +206,34 @@ export default function NewExpenseScreen() {
         ))}
       </ScrollView>
 
-      <Text style={styles.section}>Paid with</Text>
-      <ScrollView
-        horizontal
-        keyboardShouldPersistTaps="handled"
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-        style={styles.chipScroller}>
-        {PAYMENT_METHODS.map((method) => (
-          <Chip
-            key={method.value}
-            label={method.label}
-            selected={paymentMethod === method.value}
-            onPress={() => choosePayment(method.value)}
-          />
-        ))}
-      </ScrollView>
-
-      {paymentMethod === 'card' && cards.length === 0 && (
-        <PressableScale
-          accessibilityRole="button"
-          onPress={() => router.push('/card/form')}
-          style={styles.addCard}>
-          <Text style={styles.plan}>Add a credit card first</Text>
-        </PressableScale>
-      )}
-
-      {paymentMethod === 'card' && cards.length > 1 && (
-        <ScrollView
-          horizontal
-          keyboardShouldPersistTaps="handled"
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          style={styles.chipScroller}>
-          {cards.map((option) => (
-            <Chip
-              key={option.id}
-              label={`${option.name} ${option.lastFour}`}
-              selected={cardId === option.id}
-              onPress={() => setCardId(option.id)}
-            />
-          ))}
-        </ScrollView>
-      )}
-
-      {paymentMethod === 'debit' && debitCards.length > 1 && (
-        <ScrollView
-          horizontal
-          keyboardShouldPersistTaps="handled"
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          style={styles.chipScroller}>
-          {debitCards.map((option) => (
-            <Chip
-              key={option.id}
-              label={`${option.name} ${option.lastFour}`}
-              selected={debitCardId === option.id}
-              onPress={() => setDebitCardId(option.id)}
-            />
-          ))}
-        </ScrollView>
-      )}
-
-      {cardId !== null && (
-        <>
-          <InstallmentPicker value={installments} onChange={setInstallments} />
-          <Text style={styles.plan}>
-            {schedule
-              ? `${installments} × ${formatCop(schedule[schedule.length - 1].amountCop)} · first due ${formatDay(schedule[0].dueOn)}`
-              : 'Enter the amount to see the plan'}
-          </Text>
-        </>
-      )}
+      <PaymentPicker value={payment} onChange={changePayment} onCardsLoaded={setCards}>
+        {payment.cardId !== null && (
+          <>
+            <InstallmentPicker value={installments} onChange={setInstallments} />
+            {installments > 1 && (
+              <View style={styles.form}>
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Monthly interest %</Text>
+                  <TextInput
+                    accessibilityLabel="Monthly interest percent"
+                    keyboardType="decimal-pad"
+                    onChangeText={setInterestText}
+                    placeholder="0"
+                    placeholderTextColor={colors.muted}
+                    style={styles.input}
+                    value={shownRate === '0' ? '' : shownRate}
+                  />
+                </View>
+              </View>
+            )}
+            <Text style={styles.plan}>
+              {schedule
+                ? `${installments} installments · first ${formatCop(schedule[0].amountCop)} due ${formatDay(schedule[0].dueOn)}`
+                : 'Enter the amount to see the plan'}
+            </Text>
+          </>
+        )}
+      </PaymentPicker>
 
       <Keypad
         onDigits={(digits) => setAmountCop(appendDigits(amountCop, digits))}
@@ -390,16 +349,6 @@ const styles = StyleSheet.create({
   chips: {
     gap: 8,
     paddingHorizontal: 20,
-  },
-  section: {
-    marginTop: 2,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.ink,
-  },
-  addCard: {
-    minHeight: 44,
-    justifyContent: 'center',
   },
   plan: {
     fontSize: 13,

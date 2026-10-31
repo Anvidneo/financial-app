@@ -32,10 +32,13 @@ export default function ExpenseDetailScreen() {
 
   const schedule =
     expense.cardCutOffDay !== null && expense.cardPaymentDay !== null
-      ? buildSchedule(expense.amountCop, expense.installments, expense.spentOn, {
-          cutOffDay: expense.cardCutOffDay,
-          paymentDay: expense.cardPaymentDay,
-        })
+      ? buildSchedule(
+          expense.amountCop,
+          expense.installments,
+          expense.spentOn,
+          { cutOffDay: expense.cardCutOffDay, paymentDay: expense.cardPaymentDay },
+          expense.interestRate,
+        )
       : null;
 
   const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
@@ -105,14 +108,20 @@ export default function ExpenseDetailScreen() {
           <Text style={styles.label}>Category</Text>
           <Text style={styles.value}>{expense.categoryName}</Text>
         </View>
-        <View style={[styles.detail, (paid || schedule) && styles.divider]}>
+        <View style={[styles.detail, (paid || schedule || expense.accountName) && styles.divider]}>
           <Text style={styles.label}>Date</Text>
           <Text style={styles.value}>{formatDay(expense.spentOn)}</Text>
         </View>
         {paid && (
-          <View style={[styles.detail, schedule && styles.divider]}>
+          <View style={[styles.detail, (schedule || expense.accountName) && styles.divider]}>
             <Text style={styles.label}>Paid with</Text>
             <Text style={styles.value}>{paid}</Text>
+          </View>
+        )}
+        {expense.accountName && (
+          <View style={[styles.detail, schedule && styles.divider]}>
+            <Text style={styles.label}>From account</Text>
+            <Text style={styles.value}>{expense.accountName}</Text>
           </View>
         )}
         {schedule && (
@@ -120,7 +129,9 @@ export default function ExpenseDetailScreen() {
             <View style={[styles.detail, styles.divider]}>
               <Text style={styles.label}>Installments</Text>
               <Text style={styles.value}>
-                {expense.installments} × {formatCop(schedule[schedule.length - 1].amountCop)}
+                {expense.interestRate > 0
+                  ? `${expense.installments} at ${expense.interestRate}%`
+                  : `${expense.installments} × ${formatCop(schedule[schedule.length - 1].amountCop)}`}
               </Text>
             </View>
             <View style={styles.detail}>

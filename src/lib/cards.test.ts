@@ -54,6 +54,7 @@ test('buildSchedule matches the design example', () => {
     number: 1,
     count: 6,
     amountCop: 300000,
+    capitalCop: 300000,
     cutOffOn: '2026-11-30',
     dueOn: '2026-12-15',
   });
@@ -109,6 +110,44 @@ test('paying a statement frees its installments and moves to the open cycle', ()
 test('an overdue statement stays on screen until it is paid', () => {
   const summary = summarizeCard(cycle, [purchase({})], [], '2026-12-20');
   assert.equal(summary.statement.cutOffOn, '2026-10-30');
+});
+
+test('interest is charged on the remaining balance', () => {
+  const schedule = buildSchedule(1200000, 3, '2026-10-12', cycle, 2);
+  assert.deepEqual(
+    schedule.map((item) => item.amountCop),
+    [424000, 416000, 408000],
+  );
+  assert.equal(schedule.reduce((sum, item) => sum + item.capitalCop, 0), 1200000);
+});
+
+test('a single payment has no interest', () => {
+  assert.equal(buildSchedule(100000, 1, '2026-10-12', cycle, 2)[0].amountCop, 100000);
+});
+
+test('interest reaches the statement but not credit used', () => {
+  const summary = summarizeCard(
+    cycle,
+    [purchase({ installments: 2, interestRate: 2 })],
+    [],
+    '2026-10-31',
+  );
+  assert.equal(summary.statement.balanceCop, 624000);
+  assert.equal(summary.usedCop, 1200000);
+});
+
+test('a partial payment lowers the balance and keeps the statement open', () => {
+  const summary = summarizeCard(
+    cycle,
+    [purchase({ amountCop: 300000, installments: 1 })],
+    [{ cutOffOn: '2026-10-30', minimumCop: null, paidOn: null, paidCop: 100000 }],
+    '2026-10-31',
+  );
+  assert.equal(summary.statement.totalCop, 300000);
+  assert.equal(summary.statement.paidCop, 100000);
+  assert.equal(summary.statement.balanceCop, 200000);
+  assert.equal(summary.statement.cutOffOn, '2026-10-30');
+  assert.equal(summary.usedCop, 200000);
 });
 
 test('a card with no purchases shows the open cycle at zero', () => {

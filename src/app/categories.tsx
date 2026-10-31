@@ -45,7 +45,13 @@ export default function CategoriesScreen() {
         <Text accessibilityRole="header" style={styles.title}>
           Categories
         </Text>
-        <View style={styles.headerButton} />
+        <PressableScale
+          accessibilityLabel="Add category"
+          accessibilityRole="button"
+          onPress={() => router.push('/category/form')}
+          style={styles.headerButton}>
+          <SymbolView name="plus" size={18} tintColor={colors.ink} />
+        </PressableScale>
       </View>
 
       <View style={styles.total}>
@@ -53,13 +59,13 @@ export default function CategoriesScreen() {
         <Text style={styles.amount}>{formatCop(totalCop)}</Text>
       </View>
 
-      {totals.length === 0 ? (
-        <Text style={styles.nothing}>No spending this month.</Text>
-      ) : (
+      {totals.length > 0 && (
         <View style={styles.list}>
           {totals.map((category, index) => (
-            <View
+            <PressableScale
               key={category.id}
+              accessibilityRole="button"
+              onPress={() => router.push(`/category/${category.id}?month=${month}`)}
               style={[styles.row, index < totals.length - 1 && styles.divider]}>
               <CategoryTile icon={category.icon} color={category.color} tint={category.tint} />
               <View style={styles.rowBody}>
@@ -72,14 +78,14 @@ export default function CategoriesScreen() {
                     style={[
                       styles.fill,
                       {
-                        width: `${(category.totalCop / totalCop) * 100}%`,
+                        width: `${totalCop > 0 ? (category.totalCop / totalCop) * 100 : 0}%`,
                         backgroundColor: category.color,
                       },
                     ]}
                   />
                 </View>
               </View>
-            </View>
+            </PressableScale>
           ))}
         </View>
       )}
@@ -126,11 +132,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
     color: colors.ink,
     fontVariant: ['tabular-nums'],
-  },
-  nothing: {
-    fontSize: 14,
-    color: colors.muted,
-    textAlign: 'center',
   },
   list: {
     borderRadius: radius.card,

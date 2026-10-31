@@ -73,7 +73,8 @@ export default function AccountsScreen() {
       )}
 
       <Text style={styles.hint}>
-        Update each balance here to match your bank. Expenses do not change it yet.
+        Expenses and card payments linked to an account lower its balance. Edit an account any
+        time to match your bank.
       </Text>
     </ScrollView>
   );

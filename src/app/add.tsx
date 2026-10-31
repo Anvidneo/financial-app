@@ -65,7 +65,9 @@ export default function AddFromLinkScreen() {
         paymentMethod: credit ? 'card' : debit ? 'debit' : params.text ? null : 'apple_pay',
         cardId: credit?.id ?? null,
         debitCardId: debit?.id ?? null,
+        accountId: debit?.accountId ?? null,
         installments: 1,
+        interestRate: 0,
       };
       const id = await addExpense(db, expense);
       await syncReminders(db);

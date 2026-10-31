@@ -5,6 +5,7 @@ import { listCards } from '@/db/cards';
 import { listRecurring } from '@/db/recurring';
 import { planReminders } from '@/lib/billing';
 import { addDays, formatDay, toDay } from '@/lib/dates';
+import { readInstallExpiry, WARNING_DAYS } from '@/lib/install';
 import { formatCop } from '@/lib/money';
 
 const REMINDER_HOUR = 9;
@@ -65,6 +66,16 @@ async function replaceSchedule(db: SQLiteDatabase): Promise<void> {
       now,
       `${card.name} ${card.lastFour} payment due ${formatDay(dueOn)}`,
       `${formatCop(balanceCop)} on this statement.`,
+    );
+  }
+
+  const expiresOn = await readInstallExpiry();
+  if (expiresOn) {
+    await schedule(
+      addDays(expiresOn, -WARNING_DAYS),
+      now,
+      `Reinstall Finance by ${formatDay(expiresOn)}`,
+      'Back up first, then run the install from your Mac over this app.',
     );
   }
 }

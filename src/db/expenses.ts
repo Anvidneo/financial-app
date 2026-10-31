@@ -20,6 +20,9 @@ export type Expense = {
   paymentMethod: PaymentMethod | null;
   cardId: number | null;
   debitCardId: number | null;
+  accountId: number | null;
+  accountName: string | null;
+  interestRate: number;
   cardLabel: string | null;
   installments: number;
   cardCutOffDay: number | null;
@@ -38,7 +41,9 @@ export type NewExpense = {
   paymentMethod: PaymentMethod | null;
   cardId: number | null;
   debitCardId: number | null;
+  accountId: number | null;
   installments: number;
+  interestRate: number;
 };
 
 export function listCategories(db: SQLiteDatabase): Promise<Category[]> {
@@ -51,7 +56,8 @@ const SELECT_EXPENSE = `
   SELECT e.id, e.merchant, e.amount_cop AS amountCop, e.spent_on AS spentOn,
          e.recurring_id IS NOT NULL AS recurring, e.category_id AS categoryId,
          e.payment_method AS paymentMethod, e.card_id AS cardId,
-         e.debit_card_id AS debitCardId, e.installments,
+         e.debit_card_id AS debitCardId, e.account_id AS accountId, a.name AS accountName,
+         e.interest_rate AS interestRate, e.installments,
          COALESCE(k.name || ' ' || k.last_four, d.name || ' ' || d.last_four) AS cardLabel,
          k.cut_off_day AS cardCutOffDay, k.payment_day AS cardPaymentDay,
          c.name AS categoryName, c.icon AS categoryIcon,
@@ -59,7 +65,8 @@ const SELECT_EXPENSE = `
   FROM expenses e
   JOIN categories c ON c.id = e.category_id
   LEFT JOIN cards k ON k.id = e.card_id
-  LEFT JOIN debit_cards d ON d.id = e.debit_card_id`;
+  LEFT JOIN debit_cards d ON d.id = e.debit_card_id
+  LEFT JOIN accounts a ON a.id = e.account_id`;
 
 export function listExpenses(
   db: SQLiteDatabase,
@@ -85,8 +92,8 @@ export async function addExpense(db: SQLiteDatabase, expense: NewExpense): Promi
   const result = await db.runAsync(
     `INSERT INTO expenses
        (merchant, amount_cop, category_id, spent_on, payment_method, card_id, debit_card_id,
-        installments)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        account_id, installments, interest_rate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     expense.merchant.trim(),
     expense.amountCop,
     expense.categoryId,
@@ -94,7 +101,9 @@ export async function addExpense(db: SQLiteDatabase, expense: NewExpense): Promi
     expense.paymentMethod,
     expense.cardId,
     expense.debitCardId,
+    expense.accountId,
     expense.installments,
+    expense.interestRate,
   );
   return result.lastInsertRowId;
 }
@@ -107,7 +116,8 @@ export async function updateExpense(
   await db.runAsync(
     `UPDATE expenses
      SET merchant = ?, amount_cop = ?, category_id = ?, spent_on = ?,
-         payment_method = ?, card_id = ?, debit_card_id = ?, installments = ?
+         payment_method = ?, card_id = ?, debit_card_id = ?, account_id = ?,
+         installments = ?, interest_rate = ?
      WHERE id = ?`,
     expense.merchant.trim(),
     expense.amountCop,
@@ -116,7 +126,9 @@ export async function updateExpense(
     expense.paymentMethod,
     expense.cardId,
     expense.debitCardId,
+    expense.accountId,
     expense.installments,
+    expense.interestRate,
     id,
   );
 }
@@ -132,12 +144,11 @@ export async function listCategoryTotals(
   month: string,
 ): Promise<CategoryTotal[]> {
   return db.getAllAsync<CategoryTotal>(
-    `SELECT c.id, c.name, c.icon, c.color, c.tint, SUM(e.amount_cop) AS totalCop
-     FROM expenses e
-     JOIN categories c ON c.id = e.category_id
-     WHERE substr(e.spent_on, 1, 7) = ?
+    `SELECT c.id, c.name, c.icon, c.color, c.tint, IFNULL(SUM(e.amount_cop), 0) AS totalCop
+     FROM categories c
+     LEFT JOIN expenses e ON e.category_id = c.id AND substr(e.spent_on, 1, 7) = ?
      GROUP BY c.id
-     ORDER BY totalCop DESC`,
+     ORDER BY totalCop DESC, c.sort_order`,
     month,
   );
 }
@@ -205,4 +216,53 @@ export async function findRecentExpense(
     amountCop,
   );
   return row?.id ?? null;
+}
+
+export type CategoryInput = Omit<Category, 'id'>;
+
+export function getCategory(db: SQLiteDatabase, id: number): Promise<Category | null> {
+  return db.getFirstAsync<Category>(
+    'SELECT id, name, icon, color, tint FROM categories WHERE id = ?',
+    id,
+  );
+}
+
+export async function addCategory(db: SQLiteDatabase, input: CategoryInput): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO categories (name, icon, color, tint, sort_order)
+     VALUES (?, ?, ?, ?, (SELECT IFNULL(MAX(sort_order), 0) + 1 FROM categories))`,
+    input.name.trim(),
+    input.icon,
+    input.color,
+    input.tint,
+  );
+}
+
+export async function updateCategory(
+  db: SQLiteDatabase,
+  id: number,
+  input: CategoryInput,
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE categories SET name = ?, icon = ?, color = ?, tint = ? WHERE id = ?',
+    input.name.trim(),
+    input.icon,
+    input.color,
+    input.tint,
+    id,
+  );
+}
+
+export async function countCategoryUses(db: SQLiteDatabase, id: number): Promise<number> {
+  const row = await db.getFirstAsync<{ total: number }>(
+    `SELECT (SELECT COUNT(*) FROM expenses WHERE category_id = ?) +
+            (SELECT COUNT(*) FROM recurring WHERE category_id = ?) AS total`,
+    id,
+    id,
+  );
+  return row?.total ?? 0;
+}
+
+export async function deleteCategory(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM categories WHERE id = ?', id);
 }

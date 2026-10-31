@@ -7,15 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
-import {
-  getCard,
-  markStatementPaid,
-  setStatementMinimum,
-  type CardWithSummary,
-} from '@/db/cards';
+import { getCard, setStatementMinimum, type CardWithSummary } from '@/db/cards';
 import { formatDay, toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
-import { syncReminders } from '@/lib/reminders';
 
 export default function CardDetailScreen() {
   const db = useSQLiteContext();
@@ -52,24 +46,6 @@ export default function CardDetailScreen() {
     );
   }
 
-  function confirmPaid() {
-    Alert.alert(
-      `Mark ${formatCop(statement.balanceCop)} as paid?`,
-      'This statement closes and its installments free your credit.',
-      [
-        { text: 'Not yet', style: 'cancel' },
-        {
-          text: 'Mark as paid',
-          onPress: async () => {
-            await markStatementPaid(db, id, statement.cutOffOn, today);
-            await syncReminders(db);
-            load();
-          },
-        },
-      ],
-    );
-  }
-
   return (
     <ScrollView
       contentContainerStyle={[
@@ -102,6 +78,11 @@ export default function CardDetailScreen() {
           {statement.closed ? 'Statement balance' : 'Current cycle'}
         </Text>
         <Text style={styles.amount}>{formatCop(statement.balanceCop)}</Text>
+        {statement.paidCop > 0 && (
+          <Text style={styles.label}>
+            {formatCop(statement.paidCop)} paid of {formatCop(statement.totalCop)}
+          </Text>
+        )}
         {statement.closed && (
           <PressableScale accessibilityRole="button" onPress={askMinimum} style={styles.minimum}>
             <Text style={styles.label}>
@@ -141,8 +122,11 @@ export default function CardDetailScreen() {
       </View>
 
       {statement.closed && statement.balanceCop > 0 && (
-        <PressableScale accessibilityRole="button" onPress={confirmPaid} style={styles.paid}>
-          <Text style={styles.paidLabel}>Mark statement as paid</Text>
+        <PressableScale
+          accessibilityRole="button"
+          onPress={() => router.push(`/card/pay?id=${id}`)}
+          style={styles.paid}>
+          <Text style={styles.paidLabel}>Record a payment</Text>
         </PressableScale>
       )}
 

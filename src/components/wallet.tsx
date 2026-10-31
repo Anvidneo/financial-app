@@ -15,15 +15,30 @@ import { formatCop } from '@/lib/money';
 const SPRING = { duration: 400, dampingRatio: 0.8 };
 const TUCKED = 0;
 const RAISED = 1;
+const PEEK = 46;
+const POCKET_HEIGHT = 170;
+const POCKET_OVERLAP = 100;
+const PALETTE = [
+  { background: colors.lime, ink: colors.ink },
+  { background: colors.surface, ink: colors.recurring },
+  { background: '#CFE0FF', ink: colors.ink },
+  { background: '#F4D9B8', ink: colors.ink },
+];
+
+export type WalletItem = {
+  key: string;
+  title: string;
+  detail: string;
+};
 
 type Props = {
-  account: { name: string; balanceCop: number } | null;
-  card: { name: string; lastFour: string } | null;
+  items: WalletItem[];
+  hasAccounts: boolean;
   totalCop: number;
   onEmptyPress: () => void;
 };
 
-export function Wallet({ account, card, totalCop, onEmptyPress }: Props) {
+export function Wallet({ items, hasAccounts, totalCop, onEmptyPress }: Props) {
   const reduced = useReducedMotion();
   const [raised, setRaised] = useState(true);
   const lift = useSharedValue(reduced ? RAISED : TUCKED);
@@ -34,7 +49,7 @@ export function Wallet({ account, card, totalCop, onEmptyPress }: Props) {
   }, [lift]);
 
   function toggle() {
-    if (!account && !card) {
+    if (items.length === 0) {
       onEmptyPress();
       return;
     }
@@ -44,37 +59,36 @@ export function Wallet({ account, card, totalCop, onEmptyPress }: Props) {
     lift.set(withSpring(next ? RAISED : TUCKED, SPRING));
   }
 
+  const stackHeight = items.length * PEEK;
+
   return (
     <Pressable
       accessibilityLabel={`Total balance ${formatCop(totalCop)}`}
       accessibilityRole="button"
       onPress={toggle}
-      style={styles.wallet}>
-      {account && (
-        <PeekingCard lift={lift} tucked={58} style={styles.accountCard}>
-          <View style={styles.cardRow}>
-            <Text numberOfLines={1} style={styles.accountName}>
-              {account.name}
-            </Text>
-          </View>
-          <Text style={styles.accountBalance}>{formatCop(account.balanceCop)}</Text>
-        </PeekingCard>
-      )}
-      {card && (
-        <PeekingCard lift={lift} tucked={36} style={styles.creditCard}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardDigits}>•••• {card.lastFour}</Text>
-            <Text numberOfLines={1} style={styles.cardName}>
-              {card.name}
-            </Text>
-          </View>
-        </PeekingCard>
-      )}
-      <View style={styles.pocket}>
+      style={[styles.wallet, { height: stackHeight + POCKET_HEIGHT }]}>
+      {items.map((item, index) => {
+        const palette = PALETTE[index % PALETTE.length];
+        return (
+          <PeekingCard
+            key={item.key}
+            lift={lift}
+            tucked={(items.length - index) * PEEK - 16}
+            style={{ top: index * PEEK, backgroundColor: palette.background }}>
+            <View style={styles.cardRow}>
+              <Text numberOfLines={1} style={[styles.cardTitle, { color: palette.ink }]}>
+                {item.title}
+              </Text>
+              <Text style={[styles.cardDetail, { color: palette.ink }]}>{item.detail}</Text>
+            </View>
+          </PeekingCard>
+        );
+      })}
+      <View style={[styles.pocket, { top: stackHeight }]}>
         <View style={styles.pocketLip} />
         <Text style={styles.total}>{formatCop(totalCop)}</Text>
         <Text style={styles.totalLabel}>
-          {account ? 'Total balance' : 'Add an account to see your balance'}
+          {hasAccounts ? 'Total balance' : 'Add an account to see your balance'}
         </Text>
       </View>
     </Pressable>
@@ -101,25 +115,15 @@ function PeekingCard({
 
 const styles = StyleSheet.create({
   wallet: {
-    height: 270,
     alignItems: 'center',
   },
   card: {
     position: 'absolute',
     width: '90%',
-    height: 150,
+    height: POCKET_OVERLAP,
     borderRadius: radius.panel,
-    paddingVertical: 16,
+    paddingTop: 14,
     paddingHorizontal: 20,
-    gap: 4,
-  },
-  accountCard: {
-    top: 0,
-    backgroundColor: colors.lime,
-  },
-  creditCard: {
-    top: 56,
-    backgroundColor: colors.surface,
   },
   cardRow: {
     flexDirection: 'row',
@@ -127,34 +131,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  accountName: {
+  cardTitle: {
     flexShrink: 1,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1F2A14',
   },
-  accountBalance: {
-    fontSize: 22,
+  cardDetail: {
+    fontSize: 15,
     fontWeight: '600',
-    color: colors.ink,
     fontVariant: ['tabular-nums'],
-  },
-  cardDigits: {
-    fontSize: 16,
-    letterSpacing: 3,
-    color: colors.recurring,
-  },
-  cardName: {
-    flexShrink: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.recurring,
   },
   pocket: {
     position: 'absolute',
-    top: 100,
     width: '100%',
-    height: 170,
+    height: POCKET_HEIGHT,
     borderRadius: 28,
     paddingHorizontal: 26,
     paddingBottom: 22,

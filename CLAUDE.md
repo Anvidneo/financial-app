@@ -47,7 +47,7 @@ Reference: clean white cards on a light gray background, big numbers, colored ic
 4. **Home + charts**: wallet animation home screen; spending overview by category.
 5. **Automation + export**: deep link to register an expense; Shortcuts automation for Apple Pay (and bank messages); CSV export.
 
-Status: Phases 1-5 done. Remaining from the designs: Reminders list and the reinstall warning. Install on the iPhone with `npm run ios:device`.
+Status: Phases 1-5, the remaining design screens and the known gaps are done. Bank message parsing still needs a real sample message. Install on the iPhone with `npm run ios:device`.
 
 ## Skills installed (.claude/skills)
 - Emil Kowalski (16): emil-design-eng, animate-expo (use for the wallet animation), review-animations, improve-animations, animation-performance, mobile-native, apple-design, etc.

@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { chargesThrough, latestDay, nextCharge } from '@/lib/billing';
 import { addDays } from '@/lib/dates';
+import type { PaymentMethod } from '@/lib/payment';
 
 type RecurringRow = {
   id: number;
@@ -18,6 +19,12 @@ type RecurringRow = {
   startsOn: string;
   lastPostedOn: string | null;
   lastPaidOn: string | null;
+  paymentMethod: PaymentMethod | null;
+  cardId: number | null;
+  debitCardId: number | null;
+  accountId: number | null;
+  cardLabel: string | null;
+  accountName: string | null;
 };
 
 export type Recurring = Omit<RecurringRow, 'remindersOn'> & {
@@ -32,6 +39,10 @@ export type RecurringInput = {
   categoryId: number;
   billingDay: number;
   remindDays: number;
+  paymentMethod: PaymentMethod | null;
+  cardId: number | null;
+  debitCardId: number | null;
+  accountId: number | null;
 };
 
 export type RecurringCharge = {
@@ -46,10 +57,16 @@ const SELECT_RECURRING = `
          c.color AS categoryColor, c.tint AS categoryTint,
          r.billing_day AS billingDay, r.remind_days AS remindDays,
          r.reminders_on AS remindersOn, r.starts_on AS startsOn,
-         r.last_posted_on AS lastPostedOn,
+         r.last_posted_on AS lastPostedOn, r.payment_method AS paymentMethod,
+         r.card_id AS cardId, r.debit_card_id AS debitCardId, r.account_id AS accountId,
+         COALESCE(k.name || ' ' || k.last_four, d.name || ' ' || d.last_four) AS cardLabel,
+         a.name AS accountName,
          (SELECT MAX(e.spent_on) FROM expenses e WHERE e.recurring_id = r.id) AS lastPaidOn
   FROM recurring r
-  JOIN categories c ON c.id = r.category_id`;
+  JOIN categories c ON c.id = r.category_id
+  LEFT JOIN cards k ON k.id = r.card_id
+  LEFT JOIN debit_cards d ON d.id = r.debit_card_id
+  LEFT JOIN accounts a ON a.id = r.account_id`;
 
 function toRecurring(row: RecurringRow, today: string): Recurring {
   const after = latestDay(addDays(today, -1), row.startsOn, row.lastPostedOn);
@@ -83,14 +100,20 @@ export async function addRecurring(
   today: string,
 ): Promise<void> {
   await db.runAsync(
-    `INSERT INTO recurring (name, amount_cop, category_id, billing_day, remind_days, starts_on)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO recurring
+       (name, amount_cop, category_id, billing_day, remind_days, starts_on,
+        payment_method, card_id, debit_card_id, account_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     input.name.trim(),
     input.amountCop,
     input.categoryId,
     input.billingDay,
     input.remindDays,
     today,
+    input.paymentMethod,
+    input.cardId,
+    input.debitCardId,
+    input.accountId,
   );
 }
 
@@ -101,13 +124,18 @@ export async function updateRecurring(
 ): Promise<void> {
   await db.runAsync(
     `UPDATE recurring
-     SET name = ?, amount_cop = ?, category_id = ?, billing_day = ?, remind_days = ?
+     SET name = ?, amount_cop = ?, category_id = ?, billing_day = ?, remind_days = ?,
+         payment_method = ?, card_id = ?, debit_card_id = ?, account_id = ?
      WHERE id = ?`,
     input.name.trim(),
     input.amountCop,
     input.categoryId,
     input.billingDay,
     input.remindDays,
+    input.paymentMethod,
+    input.cardId,
+    input.debitCardId,
+    input.accountId,
     id,
   );
 }
@@ -146,13 +174,19 @@ export async function postDueCharges(db: SQLiteDatabase, today: string): Promise
       const charges = chargesThrough(item.billingDay, after, today);
       for (const day of charges) {
         await db.runAsync(
-          `INSERT OR IGNORE INTO expenses (merchant, amount_cop, category_id, spent_on, recurring_id)
-           VALUES (?, ?, ?, ?, ?)`,
+          `INSERT OR IGNORE INTO expenses
+             (merchant, amount_cop, category_id, spent_on, recurring_id,
+              payment_method, card_id, debit_card_id, account_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           item.name,
           item.amountCop,
           item.categoryId,
           day,
           item.id,
+          item.paymentMethod,
+          item.cardId,
+          item.debitCardId,
+          item.accountId,
         );
       }
       if (charges.length > 0) {

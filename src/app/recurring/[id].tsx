@@ -20,6 +20,7 @@ import {
 } from '@/db/recurring';
 import { formatDay, toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
+import { paymentLabel } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
 
 export default function RecurringDetailScreen() {
@@ -101,6 +102,11 @@ export default function RecurringDetailScreen() {
       <View style={styles.card}>
         <Detail label="Category" value={item.categoryName} />
         <Detail label="Billing day" value={`Day ${item.billingDay}`} />
+        <Detail
+          label="Paid with"
+          value={paymentLabel(item.paymentMethod, item.cardLabel) ?? 'Not set'}
+        />
+        {item.accountName && <Detail label="From account" value={item.accountName} />}
         <View style={styles.detail}>
           <Text style={styles.label}>
             Remind {item.remindDays} {item.remindDays === 1 ? 'day' : 'days'} before

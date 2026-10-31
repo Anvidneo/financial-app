@@ -6,6 +6,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/chip';
+import { PaymentPicker, type Payment } from '@/components/payment-picker';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { listCategories, type Category } from '@/db/expenses';
@@ -29,6 +30,12 @@ export default function RecurringFormScreen() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [billingDay, setBillingDay] = useState<number | null>(null);
   const [remindDays, setRemindDays] = useState(3);
+  const [payment, setPayment] = useState<Payment>({
+    paymentMethod: null,
+    cardId: null,
+    debitCardId: null,
+    accountId: null,
+  });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -47,6 +54,12 @@ export default function RecurringFormScreen() {
       setCategoryId(item.categoryId);
       setBillingDay(item.billingDay);
       setRemindDays(item.remindDays);
+      setPayment({
+        paymentMethod: item.paymentMethod,
+        cardId: item.cardId,
+        debitCardId: item.debitCardId,
+        accountId: item.accountId,
+      });
     });
   }, [db, id, today]);
 
@@ -60,7 +73,7 @@ export default function RecurringFormScreen() {
   async function save() {
     if (!canSave || categoryId === null || billingDay === null) return;
     setSaving(true);
-    const input = { name, amountCop, categoryId, billingDay, remindDays };
+    const input = { name, amountCop, categoryId, billingDay, remindDays, ...payment };
     try {
       if (id === null) {
         await addRecurring(db, input, today);
@@ -139,6 +152,8 @@ export default function RecurringFormScreen() {
           />
         ))}
       </ScrollView>
+
+      <PaymentPicker optional value={payment} onChange={setPayment} />
 
       <Text style={styles.section}>Billing day</Text>
       <View style={styles.days}>

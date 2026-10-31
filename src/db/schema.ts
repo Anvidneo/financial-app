@@ -99,6 +99,35 @@ export const MIGRATIONS = [
     balance_cop INTEGER NOT NULL
   );
   `,
+  `
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  INSERT INTO settings (key, value)
+    SELECT 'welcomed', '1' WHERE EXISTS (SELECT 1 FROM expenses);
+  INSERT INTO settings (key, value)
+    SELECT 'name', 'Juan' WHERE EXISTS (SELECT 1 FROM expenses);
+
+  CREATE TABLE card_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id INTEGER NOT NULL REFERENCES cards (id),
+    cut_off_on TEXT NOT NULL,
+    amount_cop INTEGER NOT NULL CHECK (amount_cop > 0),
+    paid_on TEXT NOT NULL,
+    account_id INTEGER REFERENCES accounts (id)
+  );
+
+  ALTER TABLE cards ADD COLUMN monthly_rate REAL NOT NULL DEFAULT 0;
+  ALTER TABLE debit_cards ADD COLUMN account_id INTEGER REFERENCES accounts (id);
+  ALTER TABLE expenses ADD COLUMN account_id INTEGER REFERENCES accounts (id);
+  ALTER TABLE expenses ADD COLUMN interest_rate REAL NOT NULL DEFAULT 0;
+  ALTER TABLE recurring ADD COLUMN payment_method TEXT;
+  ALTER TABLE recurring ADD COLUMN card_id INTEGER REFERENCES cards (id);
+  ALTER TABLE recurring ADD COLUMN debit_card_id INTEGER REFERENCES debit_cards (id);
+  ALTER TABLE recurring ADD COLUMN account_id INTEGER REFERENCES accounts (id);
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

@@ -9,6 +9,7 @@ export type Card = {
   limitCop: number;
   cutOffDay: number;
   paymentDay: number;
+  monthlyRate: number;
 };
 
 export type CardInput = Omit<Card, 'id'>;
@@ -17,7 +18,7 @@ export type CardWithSummary = Card & CardSummary & { purchaseCount: number };
 
 const SELECT_CARD = `
   SELECT id, name, last_four AS lastFour, limit_cop AS limitCop,
-         cut_off_day AS cutOffDay, payment_day AS paymentDay
+         cut_off_day AS cutOffDay, payment_day AS paymentDay, monthly_rate AS monthlyRate
   FROM cards`;
 
 export function listCardOptions(db: SQLiteDatabase): Promise<Card[]> {
@@ -26,15 +27,18 @@ export function listCardOptions(db: SQLiteDatabase): Promise<Card[]> {
 
 async function withSummary(db: SQLiteDatabase, card: Card, today: string): Promise<CardWithSummary> {
   const purchases = await db.getAllAsync<CardPurchase>(
-    `SELECT id, merchant, amount_cop AS amountCop, installments, spent_on AS spentOn
+    `SELECT id, merchant, amount_cop AS amountCop, installments, spent_on AS spentOn,
+            interest_rate AS interestRate
      FROM expenses
      WHERE card_id = ?`,
     card.id,
   );
   const records = await db.getAllAsync<StatementRecord>(
-    `SELECT cut_off_on AS cutOffOn, minimum_cop AS minimumCop, paid_on AS paidOn
-     FROM card_statements
-     WHERE card_id = ?`,
+    `SELECT s.cut_off_on AS cutOffOn, s.minimum_cop AS minimumCop, s.paid_on AS paidOn,
+            IFNULL((SELECT SUM(p.amount_cop) FROM card_payments p
+                    WHERE p.card_id = s.card_id AND p.cut_off_on = s.cut_off_on), 0) AS paidCop
+     FROM card_statements s
+     WHERE s.card_id = ?`,
     card.id,
   );
 
@@ -61,26 +65,29 @@ export async function getCard(
 
 export async function addCard(db: SQLiteDatabase, input: CardInput): Promise<void> {
   await db.runAsync(
-    `INSERT INTO cards (name, last_four, limit_cop, cut_off_day, payment_day)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO cards (name, last_four, limit_cop, cut_off_day, payment_day, monthly_rate)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     input.name.trim(),
     input.lastFour,
     input.limitCop,
     input.cutOffDay,
     input.paymentDay,
+    input.monthlyRate,
   );
 }
 
 export async function updateCard(db: SQLiteDatabase, id: number, input: CardInput): Promise<void> {
   await db.runAsync(
     `UPDATE cards
-     SET name = ?, last_four = ?, limit_cop = ?, cut_off_day = ?, payment_day = ?
+     SET name = ?, last_four = ?, limit_cop = ?, cut_off_day = ?, payment_day = ?,
+         monthly_rate = ?
      WHERE id = ?`,
     input.name.trim(),
     input.lastFour,
     input.limitCop,
     input.cutOffDay,
     input.paymentDay,
+    input.monthlyRate,
     id,
   );
 }
@@ -104,30 +111,47 @@ export async function setStatementMinimum(
   );
 }
 
-export async function markStatementPaid(
+export async function payStatement(
   db: SQLiteDatabase,
-  cardId: number,
-  cutOffOn: string,
-  today: string,
+  payment: {
+    cardId: number;
+    cutOffOn: string;
+    amountCop: number;
+    accountId: number | null;
+    paidOn: string;
+    settled: boolean;
+  },
 ): Promise<void> {
-  await db.runAsync(
-    `INSERT INTO card_statements (card_id, cut_off_on, paid_on) VALUES (?, ?, ?)
-     ON CONFLICT (card_id, cut_off_on) DO UPDATE SET paid_on = excluded.paid_on`,
-    cardId,
-    cutOffOn,
-    today,
-  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO card_payments (card_id, cut_off_on, amount_cop, paid_on, account_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      payment.cardId,
+      payment.cutOffOn,
+      payment.amountCop,
+      payment.paidOn,
+      payment.accountId,
+    );
+    await db.runAsync(
+      `INSERT INTO card_statements (card_id, cut_off_on, paid_on) VALUES (?, ?, ?)
+       ON CONFLICT (card_id, cut_off_on) DO UPDATE SET paid_on = excluded.paid_on`,
+      payment.cardId,
+      payment.cutOffOn,
+      payment.settled ? payment.paidOn : null,
+    );
+  });
 }
 
 export type DebitCard = {
   id: number;
   name: string;
   lastFour: string;
+  accountId: number | null;
   purchaseCount: number;
 };
 
 const SELECT_DEBIT_CARD = `
-  SELECT d.id, d.name, d.last_four AS lastFour,
+  SELECT d.id, d.name, d.last_four AS lastFour, d.account_id AS accountId,
          (SELECT COUNT(*) FROM expenses e WHERE e.debit_card_id = d.id) AS purchaseCount
   FROM debit_cards d`;
 
@@ -143,11 +167,13 @@ export async function addDebitCard(
   db: SQLiteDatabase,
   name: string,
   lastFour: string,
+  accountId: number | null,
 ): Promise<void> {
   await db.runAsync(
-    'INSERT INTO debit_cards (name, last_four) VALUES (?, ?)',
+    'INSERT INTO debit_cards (name, last_four, account_id) VALUES (?, ?, ?)',
     name.trim(),
     lastFour,
+    accountId,
   );
 }
 
@@ -156,11 +182,13 @@ export async function updateDebitCard(
   id: number,
   name: string,
   lastFour: string,
+  accountId: number | null,
 ): Promise<void> {
   await db.runAsync(
-    'UPDATE debit_cards SET name = ?, last_four = ? WHERE id = ?',
+    'UPDATE debit_cards SET name = ?, last_four = ?, account_id = ? WHERE id = ?',
     name.trim(),
     lastFour,
+    accountId,
     id,
   );
 }

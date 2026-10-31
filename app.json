@@ -8,7 +8,7 @@
     "scheme": "financeapp",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.juandavidbotero.personalfinance",
       "supportsTablet": false,
       "appleTeamId": "7QM8U3K8KN"

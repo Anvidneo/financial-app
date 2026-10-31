@@ -9,12 +9,14 @@ import { CategoryTile } from '@/components/category-tile';
 import { PressableScale } from '@/components/pressable-scale';
 import { ChargeStatus } from '@/components/status-label';
 import { Wallet } from '@/components/wallet';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, status } from '@/constants/theme';
 import { listAccounts, type Account } from '@/db/accounts';
-import { listCards, type CardWithSummary } from '@/db/cards';
+import { listCards, listDebitCards, type CardWithSummary } from '@/db/cards';
 import { listMonthTotals } from '@/db/expenses';
 import { listRecurring, type Recurring } from '@/db/recurring';
+import { getSetting, setSetting } from '@/db/settings';
 import { formatDay, greeting, toDay, toMonth } from '@/lib/dates';
+import { installDaysLeft, readInstallExpiry, WARNING_DAYS } from '@/lib/install';
 import { formatCop } from '@/lib/money';
 
 export default function HomeScreen() {
@@ -27,6 +29,10 @@ export default function HomeScreen() {
   const [cards, setCards] = useState<CardWithSummary[]>([]);
   const [recurring, setRecurring] = useState<Recurring[]>([]);
   const [spentCop, setSpentCop] = useState(0);
+  const [name, setName] = useState('');
+  const [expiresOn, setExpiresOn] = useState<string | null>(null);
+  const [hasDebit, setHasDebit] = useState(false);
+  const [setupHidden, setSetupHidden] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -34,6 +40,13 @@ export default function HomeScreen() {
       listCards(db, today).then(setCards);
       listRecurring(db, today).then(setRecurring);
       listMonthTotals(db, [month], null).then(([total]) => setSpentCop(total));
+      listDebitCards(db).then((rows) => setHasDebit(rows.length > 0));
+      getSetting(db, 'name').then((value) => setName(value ?? ''));
+      getSetting(db, 'setupHidden').then((value) => setSetupHidden(value !== null));
+      getSetting(db, 'welcomed').then((value) => {
+        if (value === null) router.replace('/welcome');
+      });
+      readInstallExpiry().then(setExpiresOn);
     }, [db, today, month]),
   );
 
@@ -41,6 +54,31 @@ export default function HomeScreen() {
   const nextCard = cards
     .filter((card) => card.statement.balanceCop > 0)
     .sort((a, b) => a.statement.dueOn.localeCompare(b.statement.dueOn))[0];
+
+  const walletItems = [
+    ...accounts.map((account) => ({
+      key: `account-${account.id}`,
+      title: account.name,
+      detail: formatCop(account.balanceCop),
+    })),
+    ...cards.map((card) => ({
+      key: `card-${card.id}`,
+      title: card.name,
+      detail: `•••• ${card.lastFour}`,
+    })),
+  ];
+  const setupSteps = [
+    { done: accounts.length > 0, label: 'Add an account', href: '/accounts/form' },
+    { done: cards.length > 0 || hasDebit, label: 'Add a card', href: '/card/form' },
+    { done: recurring.length > 0, label: 'Add a recurring charge', href: '/recurring/form' },
+  ] as const;
+  const missingSteps = setupSteps.filter((step) => !step.done);
+  const daysLeft = expiresOn ? installDaysLeft(expiresOn, today) : null;
+
+  function hideSetup() {
+    setSetupHidden(true);
+    setSetting(db, 'setupHidden', '1');
+  }
 
   return (
     <ScrollView
@@ -52,9 +90,11 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View style={styles.greeting}>
           <Text style={styles.hello}>{greeting(now.getHours())}</Text>
-          <Text accessibilityRole="header" style={styles.name}>
-            Juan
-          </Text>
+          {name.length > 0 && (
+            <Text accessibilityRole="header" style={styles.name}>
+              {name}
+            </Text>
+          )}
         </View>
         <View style={styles.headerButtons}>
           <PressableScale
@@ -63,6 +103,13 @@ export default function HomeScreen() {
             onPress={() => router.push('/accounts')}
             style={styles.headerButton}>
             <SymbolView name="building.columns" size={20} tintColor={colors.ink} />
+          </PressableScale>
+          <PressableScale
+            accessibilityLabel="Reminders"
+            accessibilityRole="button"
+            onPress={() => router.push('/reminders')}
+            style={styles.headerButton}>
+            <SymbolView name="bell" size={20} tintColor={colors.ink} />
           </PressableScale>
           <PressableScale
             accessibilityLabel="Settings"
@@ -74,9 +121,21 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {daysLeft !== null && expiresOn && daysLeft <= WARNING_DAYS && (
+        <PressableScale
+          accessibilityRole="button"
+          onPress={() => router.push('/settings')}
+          style={styles.expiry}>
+          <Text style={styles.expiryTitle}>Reinstall by {formatDay(expiresOn)}</Text>
+          <Text style={styles.expiryText}>
+            Back up, then run the install from your Mac over this app.
+          </Text>
+        </PressableScale>
+      )}
+
       <Wallet
-        account={accounts[0] ?? null}
-        card={cards[0] ?? null}
+        items={walletItems}
+        hasAccounts={accounts.length > 0}
         totalCop={totalCop}
         onEmptyPress={() => router.push('/accounts/form')}
       />
@@ -101,6 +160,27 @@ export default function HomeScreen() {
           </Text>
         </PressableScale>
       </View>
+
+      {!setupHidden && missingSteps.length > 0 && (
+        <View style={styles.list}>
+          <View style={styles.setupHeader}>
+            <Text style={styles.setupTitle}>Finish setting up</Text>
+            <PressableScale accessibilityRole="button" onPress={hideSetup} style={styles.seeAll}>
+              <Text style={styles.seeAllLabel}>Hide</Text>
+            </PressableScale>
+          </View>
+          {missingSteps.map((step, index) => (
+            <PressableScale
+              key={step.label}
+              accessibilityRole="button"
+              onPress={() => router.push(step.href)}
+              style={[styles.setupRow, index < missingSteps.length - 1 && styles.divider]}>
+              <Text style={styles.rowName}>{step.label}</Text>
+              <SymbolView name="chevron.right" size={14} tintColor={colors.muted} />
+            </PressableScale>
+          ))}
+        </View>
+      )}
 
       <View style={styles.sectionRow}>
         <Text style={styles.section}>Upcoming charges</Text>
@@ -184,6 +264,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  expiry: {
+    gap: 2,
+    padding: 16,
+    borderRadius: radius.card,
+    backgroundColor: status.warn.background,
+  },
+  expiryTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: status.warn.text,
+  },
+  expiryText: {
+    fontSize: 13,
+    color: status.warn.text,
+  },
+  setupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  setupTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  setupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
   },
   tiles: {
     flexDirection: 'row',

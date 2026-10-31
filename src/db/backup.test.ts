@@ -89,6 +89,26 @@ test('restore refuses other files and other versions', async () => {
   await assert.rejects(restoreBackup(db, '{"app":"other"}'), /not a Finance backup/);
 
   const backup = JSON.parse(await createBackup(db));
-  backup.version = 1;
-  await assert.rejects(restoreBackup(db, JSON.stringify(backup)), /different app version/);
+  backup.version = 999;
+  await assert.rejects(restoreBackup(db, JSON.stringify(backup)), /newer app version/);
+});
+
+test('a backup from an older version still restores', async () => {
+  const source = openDatabase();
+  seed(source.sql);
+  const backup = JSON.parse(await createBackup(source.db));
+  backup.version = 7;
+  delete backup.tables.settings;
+  delete backup.tables.card_payments;
+  for (const row of backup.tables.expenses) {
+    delete row.account_id;
+    delete row.interest_rate;
+  }
+
+  const target = openDatabase();
+  target.sql.exec("INSERT INTO settings (key, value) VALUES ('name', 'Juan')");
+  await restoreBackup(target.db, JSON.stringify(backup));
+
+  assert.equal(count(target.sql, 'expenses'), 1);
+  assert.equal(count(target.sql, 'settings'), 1);
 });

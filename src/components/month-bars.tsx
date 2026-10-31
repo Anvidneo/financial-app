@@ -9,9 +9,10 @@ const BAR_HEIGHT = 84;
 type Props = {
   months: string[];
   totals: number[];
+  color?: string;
 };
 
-export function MonthBars({ months, totals }: Props) {
+export function MonthBars({ months, totals, color = colors.credit }: Props) {
   const highest = Math.max(...totals, 1);
 
   return (
@@ -29,7 +30,7 @@ export function MonthBars({ months, totals }: Props) {
             <View
               style={[
                 styles.bar,
-                current && styles.currentBar,
+                current && { backgroundColor: color },
                 { height: Math.max((total / highest) * BAR_HEIGHT, total > 0 ? 4 : 0) },
               ]}
             />
@@ -59,9 +60,6 @@ const styles = StyleSheet.create({
   bar: {
     borderRadius: 8,
     backgroundColor: '#DDE4F7',
-  },
-  currentBar: {
-    backgroundColor: colors.credit,
   },
   label: {
     fontSize: 11,

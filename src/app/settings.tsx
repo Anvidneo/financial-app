@@ -3,16 +3,18 @@ import { File, Paths } from 'expo-file-system';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { createBackup, restoreBackup } from '@/db/backup';
 import { listAllExpenses } from '@/db/expenses';
+import { getSetting, setSetting } from '@/db/settings';
 import { toCsv } from '@/lib/csv';
-import { toDay } from '@/lib/dates';
+import { formatDay, toDay } from '@/lib/dates';
+import { readInstallExpiry } from '@/lib/install';
 import { paymentLabel } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
 
@@ -35,6 +37,13 @@ export default function SettingsScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
+  const [name, setName] = useState('');
+  const [expiresOn, setExpiresOn] = useState<string | null>(null);
+
+  useEffect(() => {
+    getSetting(db, 'name').then((value) => setName(value ?? ''));
+    readInstallExpiry().then(setExpiresOn);
+  }, [db]);
 
   async function run(failure: string, task: () => Promise<void>) {
     setBusy(true);
@@ -112,6 +121,34 @@ export default function SettingsScreen() {
           Settings
         </Text>
         <View style={styles.headerButton} />
+      </View>
+
+      <View style={styles.card}>
+        <View style={[styles.action, styles.divider]}>
+          <Text style={styles.nameLabel}>Your name</Text>
+          <TextInput
+            accessibilityLabel="Your name"
+            autoCapitalize="words"
+            onChangeText={setName}
+            onEndEditing={() => setSetting(db, 'name', name.trim())}
+            placeholder="Add your name"
+            placeholderTextColor={colors.muted}
+            style={styles.nameInput}
+            value={name}
+          />
+        </View>
+        <Action
+          disabled={false}
+          divider={expiresOn !== null}
+          label="Categories"
+          onPress={() => router.push('/categories')}
+        />
+        {expiresOn && (
+          <View style={styles.action}>
+            <Text style={styles.nameLabel}>Reinstall by</Text>
+            <Text style={styles.actionLabel}>{formatDay(expiresOn)}</Text>
+          </View>
+        )}
       </View>
 
       <Text style={styles.section}>Backup</Text>
@@ -211,6 +248,18 @@ const styles = StyleSheet.create({
   divider: {
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
+  },
+  nameLabel: {
+    fontSize: 14,
+    color: colors.muted,
+  },
+  nameInput: {
+    flex: 1,
+    minHeight: 48,
+    textAlign: 'right',
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ink,
   },
   actionLabel: {
     fontSize: 15,
