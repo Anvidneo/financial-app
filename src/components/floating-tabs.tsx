@@ -11,7 +11,10 @@ type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>
 
 const BUTTON_SIZE = 56;
 
-const TABS: Record<string, { label: string; icon: SFSymbol; href: '/' | '/expenses' | '/recurring' | '/cards' }> = {
+const TABS: Record<
+  string,
+  { label: string; icon: SFSymbol; href: '/' | '/expenses' | '/recurring' | '/cards' }
+> = {
   index: { label: 'Home', icon: 'wallet.bifold', href: '/' },
   expenses: { label: 'Expenses', icon: 'chart.bar', href: '/expenses' },
   recurring: { label: 'Recurring', icon: 'repeat', href: '/recurring' },

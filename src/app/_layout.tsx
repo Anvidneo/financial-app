@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ScreenSkeleton } from '@/components/skeleton';
 import { colors } from '@/constants/theme';
 import { postDueCharges } from '@/db/recurring';
 import { migrate } from '@/db/schema';
@@ -35,7 +36,7 @@ function ChargeSync({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, [db]);
 
-  return ready ? children : null;
+  return ready ? children : <ScreenSkeleton root variant="home" />;
 }
 
 // Side insets are zero on most iPhones, but foldables keep the camera and clock in a side column.
@@ -50,9 +51,9 @@ function Screens() {
         contentStyle: { backgroundColor: colors.background, ...sides },
       }}>
       <Stack.Screen
-          name="(tabs)"
-          options={{ contentStyle: { backgroundColor: colors.background } }}
-        />
+        name="(tabs)"
+        options={{ contentStyle: { backgroundColor: colors.background } }}
+      />
       <Stack.Screen name="new-expense" options={{ presentation: 'modal' }} />
       <Stack.Screen name="expense/[id]" />
       <Stack.Screen name="accounts/index" />

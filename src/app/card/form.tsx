@@ -134,15 +134,13 @@ export default function CardFormScreen() {
     <ScrollView
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}
-      style={styles.screen}
-    >
+      style={styles.screen}>
       <View style={styles.header}>
         <PressableScale
           accessibilityLabel="Close"
           accessibilityRole="button"
           onPress={() => router.back()}
-          style={styles.close}
-        >
+          style={styles.close}>
           <SymbolView name="xmark" size={16} tintColor={colors.ink} />
         </PressableScale>
         <Text accessibilityRole="header" style={styles.title}>
@@ -237,11 +235,7 @@ export default function CardFormScreen() {
         <>
           <Text style={styles.section}>Linked account</Text>
           <View style={styles.types}>
-            <Chip
-              label="None"
-              selected={accountId === null}
-              onPress={() => setAccountId(null)}
-            />
+            <Chip label="None" selected={accountId === null} onPress={() => setAccountId(null)} />
             {accounts.map((account) => (
               <Chip
                 key={account.id}
@@ -267,8 +261,7 @@ export default function CardFormScreen() {
         accessibilityState={{ disabled: !canSave }}
         disabled={!canSave}
         onPress={save}
-        style={[styles.save, !canSave && styles.saveDisabled]}
-      >
+        style={[styles.save, !canSave && styles.saveDisabled]}>
         <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>Save card</Text>
       </PressableScale>
 

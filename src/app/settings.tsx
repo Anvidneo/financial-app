@@ -94,7 +94,7 @@ export default function SettingsScreen() {
 
     Alert.alert(
       'Replace all data?',
-      'Everything in the app is replaced by this backup. This can\'t be undone.',
+      "Everything in the app is replaced by this backup. This can't be undone.",
       [
         { text: 'Keep my data', style: 'cancel' },
         { text: 'Replace', style: 'destructive', onPress: () => restore(uri) },

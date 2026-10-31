@@ -1,11 +1,14 @@
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CategoryTile } from '@/components/category-tile';
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius, status } from '@/constants/theme';
 import {
   deleteExpense,
@@ -30,13 +33,14 @@ export default function QuickConfirmScreen() {
 
   useEffect(() => {
     getExpense(db, id).then((row) => {
+      if (row) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setExpense(row);
       setCategoryId(row?.categoryId ?? null);
     });
     listCategories(db).then(setCategories);
   }, [db, id]);
 
-  if (!expense) return <View style={styles.screen} />;
+  if (!expense) return <ScreenSkeleton variant="detail" />;
 
   async function choose(category: number) {
     setCategoryId(category);
@@ -51,11 +55,8 @@ export default function QuickConfirmScreen() {
 
   return (
     <View
-      style={[
-        styles.screen,
-        { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 12 },
-      ]}>
-      <View style={styles.summary}>
+      style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 12 }]}>
+      <Animated.View entering={FadeInDown.duration(240)} style={styles.summary}>
         <View style={styles.saved}>
           <Text style={styles.savedLabel}>Saved</Text>
         </View>
@@ -68,7 +69,7 @@ export default function QuickConfirmScreen() {
         <Text style={styles.paid}>
           {paymentLabel(expense.paymentMethod, expense.cardLabel) ?? 'Payment method not set'}
         </Text>
-      </View>
+      </Animated.View>
 
       <Text style={styles.section}>Category</Text>
       <View style={styles.grid}>

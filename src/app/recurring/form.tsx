@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
@@ -82,6 +83,7 @@ export default function RecurringFormScreen() {
         await updateRecurring(db, id, input);
       }
       await syncReminders(db);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch {
       setSaving(false);

@@ -77,9 +77,7 @@ export default function RemindersScreen() {
             ]
           : [];
 
-        setItems(
-          [...charges, ...payments, ...install].sort((a, b) => a.day.localeCompare(b.day)),
-        );
+        setItems([...charges, ...payments, ...install].sort((a, b) => a.day.localeCompare(b.day)));
         setAllowed(await remindersAllowed());
       }
 

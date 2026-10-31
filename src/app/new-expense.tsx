@@ -1,8 +1,10 @@
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/chip';
@@ -24,7 +26,6 @@ import { addDays, formatDay, formatRelativeDay, toDay } from '@/lib/dates';
 import { appendDigits, formatCop, removeLastDigit } from '@/lib/money';
 import type { PaymentMethod } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
-
 
 export default function NewExpenseScreen() {
   const db = useSQLiteContext();
@@ -115,6 +116,7 @@ export default function NewExpenseScreen() {
         await updateExpense(db, id, expense);
       }
       await syncReminders(db);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch {
       setSaving(false);
@@ -235,21 +237,23 @@ export default function NewExpenseScreen() {
         )}
       </PaymentPicker>
 
-      <Keypad
-        onDigits={(digits) => setAmountCop(appendDigits(amountCop, digits))}
-        onDelete={() => setAmountCop(removeLastDigit(amountCop))}
-      />
+      <Animated.View layout={LinearTransition.duration(200)} style={styles.bottom}>
+        <Keypad
+          onDigits={(digits) => setAmountCop(appendDigits(amountCop, digits))}
+          onDelete={() => setAmountCop(removeLastDigit(amountCop))}
+        />
 
-      <PressableScale
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canSave }}
-        disabled={!canSave}
-        onPress={save}
-        style={[styles.save, !canSave && styles.saveDisabled]}>
-        <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>
-          {id === null ? 'Save expense' : 'Save changes'}
-        </Text>
-      </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSave }}
+          disabled={!canSave}
+          onPress={save}
+          style={[styles.save, !canSave && styles.saveDisabled]}>
+          <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>
+            {id === null ? 'Save expense' : 'Save changes'}
+          </Text>
+        </PressableScale>
+      </Animated.View>
     </ScrollView>
   );
 }
@@ -349,6 +353,9 @@ const styles = StyleSheet.create({
   chips: {
     gap: 8,
     paddingHorizontal: 20,
+  },
+  bottom: {
+    gap: 12,
   },
   plan: {
     fontSize: 13,

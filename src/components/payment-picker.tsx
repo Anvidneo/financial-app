@@ -38,7 +38,13 @@ function ChipRow({ children }: { children: ReactNode }) {
   );
 }
 
-export function PaymentPicker({ value, optional = false, onChange, onCardsLoaded, children }: Props) {
+export function PaymentPicker({
+  value,
+  optional = false,
+  onChange,
+  onCardsLoaded,
+  children,
+}: Props) {
   const db = useSQLiteContext();
   const [cards, setCards] = useState<Card[]>([]);
   const [debitCards, setDebitCards] = useState<DebitCard[]>([]);

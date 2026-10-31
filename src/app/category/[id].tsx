@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryTile } from '@/components/category-tile';
 import { MonthBars } from '@/components/month-bars';
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
 import {
   getCategory,
@@ -39,75 +40,73 @@ export default function CategoryDetailScreen() {
     }, [db, id, month, months]),
   );
 
-  if (!category) return <View style={styles.screen} />;
+  if (!category) return <ScreenSkeleton variant="detail" />;
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
-          {category.name}
-        </Text>
-        <PressableScale
-          accessibilityLabel="Edit category"
-          accessibilityRole="button"
-          onPress={() => router.push(`/category/form?id=${id}`)}
-          style={styles.headerButton}>
-          <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
-
-      <View style={styles.summary}>
-        <Text style={styles.month}>{formatMonth(month)}</Text>
-        <Text style={styles.total}>{formatCop(totals[totals.length - 1] ?? 0)}</Text>
-        <MonthBars color={category.color} months={months} totals={totals} />
-      </View>
-
-      <Text style={styles.section}>Movements</Text>
-      {expenses.length === 0 ? (
-        <Text style={styles.nothing}>No movements this month.</Text>
-      ) : (
-        <View style={styles.list}>
-          {expenses.map((expense, index) => {
-            const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
-            return (
-              <PressableScale
-                key={expense.id}
-                accessibilityRole="button"
-                onPress={() => router.push(`/expense/${expense.id}`)}
-                style={[styles.row, index < expenses.length - 1 && styles.divider]}>
-                <CategoryTile
-                  icon={category.icon}
-                  color={category.color}
-                  tint={category.tint}
-                />
-                <View style={styles.rowText}>
-                  <Text numberOfLines={1} style={styles.rowName}>
-                    {expense.merchant}
-                  </Text>
-                  <Text style={styles.rowDetail}>{paid ?? 'No payment method'}</Text>
-                </View>
-                <View style={styles.rowEnd}>
-                  <Text style={styles.rowName}>{formatCop(expense.amountCop)}</Text>
-                  <Text style={styles.rowDetail}>{formatDay(expense.spentOn)}</Text>
-                </View>
-              </PressableScale>
-            );
-          })}
+    <FadeInScreen>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
+        ]}
+        style={styles.screen}>
+        <View style={styles.header}>
+          <PressableScale
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={styles.headerButton}>
+            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
+          </PressableScale>
+          <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
+            {category.name}
+          </Text>
+          <PressableScale
+            accessibilityLabel="Edit category"
+            accessibilityRole="button"
+            onPress={() => router.push(`/category/form?id=${id}`)}
+            style={styles.headerButton}>
+            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
+          </PressableScale>
         </View>
-      )}
-    </ScrollView>
+
+        <View style={styles.summary}>
+          <Text style={styles.month}>{formatMonth(month)}</Text>
+          <Text style={styles.total}>{formatCop(totals[totals.length - 1] ?? 0)}</Text>
+          <MonthBars color={category.color} months={months} totals={totals} />
+        </View>
+
+        <Text style={styles.section}>Movements</Text>
+        {expenses.length === 0 ? (
+          <Text style={styles.nothing}>No movements this month.</Text>
+        ) : (
+          <View style={styles.list}>
+            {expenses.map((expense, index) => {
+              const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
+              return (
+                <PressableScale
+                  key={expense.id}
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/expense/${expense.id}`)}
+                  style={[styles.row, index < expenses.length - 1 && styles.divider]}>
+                  <CategoryTile icon={category.icon} color={category.color} tint={category.tint} />
+                  <View style={styles.rowText}>
+                    <Text numberOfLines={1} style={styles.rowName}>
+                      {expense.merchant}
+                    </Text>
+                    <Text style={styles.rowDetail}>{paid ?? 'No payment method'}</Text>
+                  </View>
+                  <View style={styles.rowEnd}>
+                    <Text style={styles.rowName}>{formatCop(expense.amountCop)}</Text>
+                    <Text style={styles.rowDetail}>{formatDay(expense.spentOn)}</Text>
+                  </View>
+                </PressableScale>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+    </FadeInScreen>
   );
 }
 

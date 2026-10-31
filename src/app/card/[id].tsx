@@ -6,6 +6,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
 import { getCard, setStatementMinimum, type CardWithSummary } from '@/db/cards';
 import { formatDay, toDay } from '@/lib/dates';
@@ -25,7 +26,7 @@ export default function CardDetailScreen() {
 
   useFocusEffect(load);
 
-  if (!card) return <View style={styles.screen} />;
+  if (!card) return <ScreenSkeleton variant="detail" />;
 
   const { statement } = card;
   const usedShare = card.limitCop > 0 ? Math.min(card.usedCop / card.limitCop, 1) : 0;
@@ -47,119 +48,121 @@ export default function CardDetailScreen() {
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
-          {card.name} •••• {card.lastFour}
-        </Text>
-        <PressableScale
-          accessibilityLabel="Edit card"
-          accessibilityRole="button"
-          onPress={() => router.push(`/card/form?id=${id}`)}
-          style={styles.headerButton}>
-          <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
-
-      <View style={styles.balance}>
-        <Text style={styles.label}>
-          {statement.closed ? 'Statement balance' : 'Current cycle'}
-        </Text>
-        <Text style={styles.amount}>{formatCop(statement.balanceCop)}</Text>
-        {statement.paidCop > 0 && (
-          <Text style={styles.label}>
-            {formatCop(statement.paidCop)} paid of {formatCop(statement.totalCop)}
+    <FadeInScreen>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
+        ]}
+        style={styles.screen}>
+        <View style={styles.header}>
+          <PressableScale
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={styles.headerButton}>
+            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
+          </PressableScale>
+          <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
+            {card.name} •••• {card.lastFour}
           </Text>
-        )}
-        {statement.closed && (
-          <PressableScale accessibilityRole="button" onPress={askMinimum} style={styles.minimum}>
+          <PressableScale
+            accessibilityLabel="Edit card"
+            accessibilityRole="button"
+            onPress={() => router.push(`/card/form?id=${id}`)}
+            style={styles.headerButton}>
+            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
+          </PressableScale>
+        </View>
+
+        <View style={styles.balance}>
+          <Text style={styles.label}>
+            {statement.closed ? 'Statement balance' : 'Current cycle'}
+          </Text>
+          <Text style={styles.amount}>{formatCop(statement.balanceCop)}</Text>
+          {statement.paidCop > 0 && (
             <Text style={styles.label}>
-              Minimum payment{' '}
-              <Text style={styles.strong}>
-                {statement.minimumCop === null ? 'Add' : formatCop(statement.minimumCop)}
-              </Text>
+              {formatCop(statement.paidCop)} paid of {formatCop(statement.totalCop)}
             </Text>
+          )}
+          {statement.closed && (
+            <PressableScale accessibilityRole="button" onPress={askMinimum} style={styles.minimum}>
+              <Text style={styles.label}>
+                Minimum payment{' '}
+                <Text style={styles.strong}>
+                  {statement.minimumCop === null ? 'Add' : formatCop(statement.minimumCop)}
+                </Text>
+              </Text>
+            </PressableScale>
+          )}
+        </View>
+
+        <View style={styles.dates}>
+          <View style={styles.date}>
+            <Text style={styles.dateLabel}>Cut-off date</Text>
+            <Text style={styles.dateValue}>{formatDay(statement.cutOffOn)}</Text>
+          </View>
+          <View style={styles.date}>
+            <Text style={styles.dateLabel}>Payment due</Text>
+            <Text style={[styles.dateValue, statement.closed && styles.due]}>
+              {formatDay(statement.dueOn)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.credit}>
+          <View style={styles.creditRow}>
+            <Text style={styles.creditLabel}>Credit used</Text>
+            <Text style={styles.creditValue}>
+              {formatCop(card.usedCop)} of {formatCop(card.limitCop)}
+            </Text>
+          </View>
+          <View style={styles.track}>
+            <View style={[styles.fill, { width: `${usedShare * 100}%` }]} />
+          </View>
+          <Text style={styles.creditLabel}>{formatCop(card.availableCop)} available</Text>
+        </View>
+
+        {statement.closed && statement.balanceCop > 0 && (
+          <PressableScale
+            accessibilityRole="button"
+            onPress={() => router.push(`/card/pay?id=${id}`)}
+            style={styles.paid}>
+            <Text style={styles.paidLabel}>Record a payment</Text>
           </PressableScale>
         )}
-      </View>
 
-      <View style={styles.dates}>
-        <View style={styles.date}>
-          <Text style={styles.dateLabel}>Cut-off date</Text>
-          <Text style={styles.dateValue}>{formatDay(statement.cutOffOn)}</Text>
-        </View>
-        <View style={styles.date}>
-          <Text style={styles.dateLabel}>Payment due</Text>
-          <Text style={[styles.dateValue, statement.closed && styles.due]}>
-            {formatDay(statement.dueOn)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.credit}>
-        <View style={styles.creditRow}>
-          <Text style={styles.creditLabel}>Credit used</Text>
-          <Text style={styles.creditValue}>
-            {formatCop(card.usedCop)} of {formatCop(card.limitCop)}
-          </Text>
-        </View>
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${usedShare * 100}%` }]} />
-        </View>
-        <Text style={styles.creditLabel}>{formatCop(card.availableCop)} available</Text>
-      </View>
-
-      {statement.closed && statement.balanceCop > 0 && (
-        <PressableScale
-          accessibilityRole="button"
-          onPress={() => router.push(`/card/pay?id=${id}`)}
-          style={styles.paid}>
-          <Text style={styles.paidLabel}>Record a payment</Text>
-        </PressableScale>
-      )}
-
-      {statement.items.length > 0 ? (
-        <>
-          <Text style={styles.section}>Movements</Text>
-          <View style={styles.list}>
-            {statement.items.map((item, index) => (
-              <PressableScale
-                key={`${item.purchaseId}-${item.number}`}
-                accessibilityRole="button"
-                onPress={() => router.push(`/expense/${item.purchaseId}`)}
-                style={[styles.row, index < statement.items.length - 1 && styles.divider]}>
-                <View style={styles.rowText}>
-                  <Text numberOfLines={1} style={styles.rowName}>
-                    {item.merchant}
-                  </Text>
-                  <Text style={styles.rowDetail}>
-                    {item.count === 1
-                      ? '1 installment'
-                      : `Installment ${item.number} of ${item.count}`}{' '}
-                    · {formatDay(item.spentOn)}
-                  </Text>
-                </View>
-                <Text style={styles.rowName}>{formatCop(item.amountCop)}</Text>
-              </PressableScale>
-            ))}
-          </View>
-        </>
-      ) : (
-        <Text style={styles.nothing}>No movements in this cycle.</Text>
-      )}
-    </ScrollView>
+        {statement.items.length > 0 ? (
+          <>
+            <Text style={styles.section}>Movements</Text>
+            <View style={styles.list}>
+              {statement.items.map((item, index) => (
+                <PressableScale
+                  key={`${item.purchaseId}-${item.number}`}
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/expense/${item.purchaseId}`)}
+                  style={[styles.row, index < statement.items.length - 1 && styles.divider]}>
+                  <View style={styles.rowText}>
+                    <Text numberOfLines={1} style={styles.rowName}>
+                      {item.merchant}
+                    </Text>
+                    <Text style={styles.rowDetail}>
+                      {item.count === 1
+                        ? '1 installment'
+                        : `Installment ${item.number} of ${item.count}`}{' '}
+                      · {formatDay(item.spentOn)}
+                    </Text>
+                  </View>
+                  <Text style={styles.rowName}>{formatCop(item.amountCop)}</Text>
+                </PressableScale>
+              ))}
+            </View>
+          </>
+        ) : (
+          <Text style={styles.nothing}>No movements in this cycle.</Text>
+        )}
+      </ScrollView>
+    </FadeInScreen>
   );
 }
 

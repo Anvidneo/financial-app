@@ -16,6 +16,8 @@ const SPRING = { duration: 400, dampingRatio: 0.8 };
 const TUCKED = 0;
 const RAISED = 1;
 const PEEK = 46;
+const STAGGER = 0.08;
+const MAX_STAGGER = 0.4;
 const POCKET_HEIGHT = 170;
 const POCKET_OVERLAP = 100;
 const PALETTE = [
@@ -72,6 +74,7 @@ export function Wallet({ items, hasAccounts, totalCop, onEmptyPress }: Props) {
         return (
           <PeekingCard
             key={item.key}
+            delay={Math.min((items.length - 1 - index) * STAGGER, MAX_STAGGER)}
             lift={lift}
             tucked={(items.length - index) * PEEK - 16}
             style={{ top: index * PEEK, backgroundColor: palette.background }}>
@@ -96,19 +99,23 @@ export function Wallet({ items, hasAccounts, totalCop, onEmptyPress }: Props) {
 }
 
 function PeekingCard({
+  delay,
   lift,
   tucked,
   style,
   children,
 }: {
+  delay: number;
   lift: SharedValue<number>;
   tucked: number;
   style: object;
   children: React.ReactNode;
 }) {
-  const animated = useAnimatedStyle(() => ({
-    transform: [{ translateY: (RAISED - lift.get()) * tucked }],
-  }));
+  // One shared value drives the stack; cards nearest the pocket start moving first.
+  const animated = useAnimatedStyle(() => {
+    const progress = Math.max((lift.get() - delay) / (RAISED - delay), TUCKED);
+    return { transform: [{ translateY: (RAISED - progress) * tucked }] };
+  });
 
   return <Animated.View style={[styles.card, style, animated]}>{children}</Animated.View>;
 }

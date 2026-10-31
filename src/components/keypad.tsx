@@ -40,13 +40,7 @@ export function Keypad({ onDigits, onDelete }: Props) {
   );
 }
 
-function DigitKey({
-  digits,
-  onPress,
-}: {
-  digits: string;
-  onPress: (digits: string) => void;
-}) {
+function DigitKey({ digits, onPress }: { digits: string; onPress: (digits: string) => void }) {
   return (
     <PressableScale accessibilityRole="button" onPress={() => onPress(digits)} style={styles.key}>
       <Text style={styles.label}>{digits}</Text>

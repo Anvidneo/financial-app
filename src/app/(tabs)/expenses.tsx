@@ -10,6 +10,7 @@ import { CategoryTile } from '@/components/category-tile';
 import { MonthBars } from '@/components/month-bars';
 import { Chip } from '@/components/chip';
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
 import {
   listCategories,
@@ -31,14 +32,22 @@ export default function ExpensesScreen() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [monthTotals, setMonthTotals] = useState<number[]>([]);
   const chartMonths = useMemo(() => lastMonths(month, 5), [month]);
 
   useFocusEffect(
     useCallback(() => {
-      listCategories(db).then(setCategories);
-      listExpenses(db, month, categoryId).then(setExpenses);
-      listMonthTotals(db, chartMonths, categoryId).then(setMonthTotals);
+      Promise.all([
+        listCategories(db),
+        listExpenses(db, month, categoryId),
+        listMonthTotals(db, chartMonths, categoryId),
+      ]).then(([categoryRows, expenseRows, totals]) => {
+        setCategories(categoryRows);
+        setExpenses(expenseRows);
+        setMonthTotals(totals);
+        setLoaded(true);
+      });
     }, [db, month, categoryId, chartMonths]),
   );
 
@@ -46,6 +55,8 @@ export default function ExpensesScreen() {
     () => expenses.reduce((sum, expense) => sum + expense.amountCop, 0),
     [expenses],
   );
+
+  if (!loaded) return <ScreenSkeleton variant="list" />;
 
   const header = (
     <View style={styles.header}>
@@ -101,26 +112,24 @@ export default function ExpensesScreen() {
   );
 
   return (
-    <View style={styles.screen}>
-      <FlatList
-        data={expenses}
-        keyExtractor={(expense) => expense.id.toString()}
-        ListHeaderComponent={header}
-        ListEmptyComponent={<EmptyMovements filtered={categoryId !== null} />}
-        renderItem={({ item, index }) => (
-          <ExpenseRow
-            expense={item}
-            first={index === 0}
-            last={index === expenses.length - 1}
-          />
-        )}
-        contentContainerStyle={{
-          paddingTop: insets.top + 12,
-          paddingBottom: rail.contentBottom,
-          paddingHorizontal: 20,
-        }}
-      />
-    </View>
+    <FadeInScreen>
+      <View style={styles.screen}>
+        <FlatList
+          data={expenses}
+          keyExtractor={(expense) => expense.id.toString()}
+          ListHeaderComponent={header}
+          ListEmptyComponent={<EmptyMovements filtered={categoryId !== null} />}
+          renderItem={({ item, index }) => (
+            <ExpenseRow expense={item} first={index === 0} last={index === expenses.length - 1} />
+          )}
+          contentContainerStyle={{
+            paddingTop: insets.top + 12,
+            paddingBottom: rail.contentBottom,
+            paddingHorizontal: 20,
+          }}
+        />
+      </View>
+    </FadeInScreen>
   );
 }
 
@@ -143,24 +152,12 @@ function MonthButton({
       disabled={disabled}
       onPress={onPress}
       style={styles.monthButton}>
-      <SymbolView
-        name={icon}
-        size={16}
-        tintColor={disabled ? colors.control : colors.muted}
-      />
+      <SymbolView name={icon} size={16} tintColor={disabled ? colors.control : colors.muted} />
     </PressableScale>
   );
 }
 
-function ExpenseRow({
-  expense,
-  first,
-  last,
-}: {
-  expense: Expense;
-  first: boolean;
-  last: boolean;
-}) {
+function ExpenseRow({ expense, first, last }: { expense: Expense; first: boolean; last: boolean }) {
   const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
 
   return (

@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
@@ -52,6 +53,7 @@ export default function CardPaymentScreen() {
         settled: amountCop === statement.balanceCop,
       });
       await syncReminders(db);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch {
       setSaving(false);
@@ -109,7 +111,9 @@ export default function CardPaymentScreen() {
       </View>
 
       {amountCop > statement.balanceCop && (
-        <Text style={styles.warning}>This is more than the {formatCop(statement.balanceCop)} due.</Text>
+        <Text style={styles.warning}>
+          This is more than the {formatCop(statement.balanceCop)} due.
+        </Text>
       )}
 
       {accounts.length > 0 && (

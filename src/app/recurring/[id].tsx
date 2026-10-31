@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CategoryTile } from '@/components/category-tile';
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { ChargeStatus } from '@/components/status-label';
 import { Toggle } from '@/components/toggle';
 import { colors, radius } from '@/constants/theme';
@@ -39,7 +40,7 @@ export default function RecurringDetailScreen() {
     }, [db, id, today]),
   );
 
-  if (!item) return <View style={styles.screen} />;
+  if (!item) return <ScreenSkeleton variant="detail" />;
 
   async function toggleReminders(value: boolean) {
     await setRemindersOn(db, id, value);
@@ -67,79 +68,81 @@ export default function RecurringDetailScreen() {
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
-          {item.name}
-        </Text>
-        <PressableScale
-          accessibilityLabel="Edit recurring"
-          accessibilityRole="button"
-          onPress={() => router.push(`/recurring/form?id=${id}`)}
-          style={styles.headerButton}>
-          <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
-
-      <View style={styles.next}>
-        <Text style={styles.label}>Next charge {formatDay(item.nextChargeOn)}</Text>
-        <Text style={styles.amount}>{formatCop(item.amountCop)}</Text>
-        <ChargeStatus nextChargeOn={item.nextChargeOn} lastPaidOn={null} today={today} />
-      </View>
-
-      <View style={styles.card}>
-        <Detail label="Category" value={item.categoryName} />
-        <Detail label="Billing day" value={`Day ${item.billingDay}`} />
-        <Detail
-          label="Paid with"
-          value={paymentLabel(item.paymentMethod, item.cardLabel) ?? 'Not set'}
-        />
-        {item.accountName && <Detail label="From account" value={item.accountName} />}
-        <View style={styles.detail}>
-          <Text style={styles.label}>
-            Remind {item.remindDays} {item.remindDays === 1 ? 'day' : 'days'} before
+    <FadeInScreen>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
+        ]}
+        style={styles.screen}>
+        <View style={styles.header}>
+          <PressableScale
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={styles.headerButton}>
+            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
+          </PressableScale>
+          <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
+            {item.name}
           </Text>
-          <Toggle label="Reminders" value={item.remindersOn} onChange={toggleReminders} />
+          <PressableScale
+            accessibilityLabel="Edit recurring"
+            accessibilityRole="button"
+            onPress={() => router.push(`/recurring/form?id=${id}`)}
+            style={styles.headerButton}>
+            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
+          </PressableScale>
         </View>
-      </View>
 
-      <Text style={styles.section}>History</Text>
-      {charges.length === 0 ? (
-        <Text style={styles.label}>Charges appear here after each billing day.</Text>
-      ) : (
+        <View style={styles.next}>
+          <Text style={styles.label}>Next charge {formatDay(item.nextChargeOn)}</Text>
+          <Text style={styles.amount}>{formatCop(item.amountCop)}</Text>
+          <ChargeStatus nextChargeOn={item.nextChargeOn} lastPaidOn={null} today={today} />
+        </View>
+
         <View style={styles.card}>
-          {charges.map((charge, index) => (
-            <View
-              key={charge.id}
-              style={[styles.charge, index < charges.length - 1 && styles.divider]}>
-              <CategoryTile
-                icon={item.categoryIcon}
-                color={item.categoryColor}
-                tint={item.categoryTint}
-              />
-              <Text style={styles.chargeDay}>{formatDay(charge.spentOn)}</Text>
-              <Text style={styles.chargeAmount}>{formatCop(charge.amountCop)}</Text>
-            </View>
-          ))}
+          <Detail label="Category" value={item.categoryName} />
+          <Detail label="Billing day" value={`Day ${item.billingDay}`} />
+          <Detail
+            label="Paid with"
+            value={paymentLabel(item.paymentMethod, item.cardLabel) ?? 'Not set'}
+          />
+          {item.accountName && <Detail label="From account" value={item.accountName} />}
+          <View style={styles.detail}>
+            <Text style={styles.label}>
+              Remind {item.remindDays} {item.remindDays === 1 ? 'day' : 'days'} before
+            </Text>
+            <Toggle label="Reminders" value={item.remindersOn} onChange={toggleReminders} />
+          </View>
         </View>
-      )}
 
-      <PressableScale accessibilityRole="button" onPress={confirmCancel} style={styles.cancel}>
-        <Text style={styles.cancelLabel}>Mark as cancelled</Text>
-      </PressableScale>
-    </ScrollView>
+        <Text style={styles.section}>History</Text>
+        {charges.length === 0 ? (
+          <Text style={styles.label}>Charges appear here after each billing day.</Text>
+        ) : (
+          <View style={styles.card}>
+            {charges.map((charge, index) => (
+              <View
+                key={charge.id}
+                style={[styles.charge, index < charges.length - 1 && styles.divider]}>
+                <CategoryTile
+                  icon={item.categoryIcon}
+                  color={item.categoryColor}
+                  tint={item.categoryTint}
+                />
+                <Text style={styles.chargeDay}>{formatDay(charge.spentOn)}</Text>
+                <Text style={styles.chargeAmount}>{formatCop(charge.amountCop)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <PressableScale accessibilityRole="button" onPress={confirmCancel} style={styles.cancel}>
+          <Text style={styles.cancelLabel}>Mark as cancelled</Text>
+        </PressableScale>
+      </ScrollView>
+    </FadeInScreen>
   );
 }
 

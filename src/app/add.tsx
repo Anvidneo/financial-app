@@ -5,12 +5,7 @@ import { View } from 'react-native';
 
 import { colors } from '@/constants/theme';
 import { listCardOptions, listDebitCards } from '@/db/cards';
-import {
-  addExpense,
-  findRecentExpense,
-  guessCategoryId,
-  type NewExpense,
-} from '@/db/expenses';
+import { addExpense, findRecentExpense, guessCategoryId, type NewExpense } from '@/db/expenses';
 import { toDay } from '@/lib/dates';
 import { lastFourDigits, parseAmount, parseBankMessage } from '@/lib/incoming';
 import { syncReminders } from '@/lib/reminders';

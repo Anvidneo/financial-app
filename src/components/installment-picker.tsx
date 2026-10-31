@@ -6,6 +6,8 @@ import Animated, {
   cubicBezier,
   Extrapolation,
   FadeIn,
+  FadeOut,
+  LinearTransition,
   interpolate,
   useAnimatedReaction,
   useAnimatedScrollHandler,
@@ -33,7 +35,7 @@ export function InstallmentPicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
-    <View style={styles.card}>
+    <Animated.View layout={LinearTransition.duration(200)} style={styles.card}>
       <PressableScale
         accessibilityLabel={`Installments, ${value}`}
         accessibilityRole="button"
@@ -56,7 +58,7 @@ export function InstallmentPicker({ value, onChange }: Props) {
       </PressableScale>
 
       {open && <Counter value={value} onChange={onChange} />}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -90,7 +92,10 @@ function Counter({ value, onChange }: Props) {
   );
 
   return (
-    <Animated.View entering={FadeIn.duration(180)} style={styles.counter}>
+    <Animated.View
+      entering={FadeIn.duration(180)}
+      exiting={FadeOut.duration(120)}
+      style={styles.counter}>
       <StepButton
         disabled={value === 1}
         icon="minus"
@@ -98,9 +103,7 @@ function Counter({ value, onChange }: Props) {
         onPress={() => scrollTo(value - 1)}
       />
 
-      <View
-        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        style={styles.carousel}>
+      <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={styles.carousel}>
         <View pointerEvents="none" style={styles.selection} />
         {width > 0 && (
           <Animated.ScrollView

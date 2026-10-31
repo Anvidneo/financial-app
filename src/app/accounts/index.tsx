@@ -73,8 +73,8 @@ export default function AccountsScreen() {
       )}
 
       <Text style={styles.hint}>
-        Expenses and card payments linked to an account lower its balance. Edit an account any
-        time to match your bank.
+        Expenses and card payments linked to an account lower its balance. Edit an account any time
+        to match your bank.
       </Text>
     </ScrollView>
   );

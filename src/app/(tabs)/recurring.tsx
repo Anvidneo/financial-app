@@ -9,6 +9,7 @@ import { useTabRail } from '@/components/floating-tabs';
 import { CategoryTile } from '@/components/category-tile';
 import { Chip } from '@/components/chip';
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { ChargeStatus } from '@/components/status-label';
 import { colors, radius } from '@/constants/theme';
 import { listRecurring, type Recurring } from '@/db/recurring';
@@ -25,23 +26,26 @@ export default function RecurringScreen() {
   const [items, setItems] = useState<Recurring[]>([]);
   const [category, setCategory] = useState<string | null>(null);
   const [allowed, setAllowed] = useState(true);
+  const [loaded, setLoaded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      listRecurring(db, today).then(setItems);
-      remindersAllowed().then(setAllowed);
+      Promise.all([listRecurring(db, today), remindersAllowed()]).then(([rows, permission]) => {
+        setItems(rows);
+        setAllowed(permission);
+        setLoaded(true);
+      });
     }, [db, today]),
   );
 
-  const categories = useMemo(
-    () => [...new Set(items.map((item) => item.categoryName))],
-    [items],
-  );
+  const categories = useMemo(() => [...new Set(items.map((item) => item.categoryName))], [items]);
   const visible = items.filter((item) => category === null || item.categoryName === category);
   const monthly = items.reduce((sum, item) => sum + item.amountCop, 0);
   const nextWeek = items
     .filter((item) => daysBetween(today, item.nextChargeOn) <= 7)
     .reduce((sum, item) => sum + item.amountCop, 0);
+
+  if (!loaded) return <ScreenSkeleton variant="list" />;
 
   const header = (
     <View style={styles.header}>
@@ -76,7 +80,9 @@ export default function RecurringScreen() {
               onPress={() => Linking.openSettings()}
               style={styles.off}>
               <Text style={styles.offTitle}>Reminders are off</Text>
-              <Text style={styles.summaryLabel}>Tap to allow notifications in iPhone Settings.</Text>
+              <Text style={styles.summaryLabel}>
+                Tap to allow notifications in iPhone Settings.
+              </Text>
             </PressableScale>
           )}
 
@@ -101,39 +107,41 @@ export default function RecurringScreen() {
   );
 
   return (
-    <FlatList
-      data={visible}
-      keyExtractor={(item) => item.id.toString()}
-      ListHeaderComponent={header}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No recurring charges yet</Text>
-          <Text style={styles.emptyText}>
-            Add a subscription or service and get a reminder before each charge.
-          </Text>
-          <PressableScale
-            accessibilityRole="button"
-            onPress={() => router.push('/recurring/form')}
-            style={styles.emptyButton}>
-            <Text style={styles.emptyButtonLabel}>Add recurring</Text>
-          </PressableScale>
-        </View>
-      }
-      renderItem={({ item, index }) => (
-        <RecurringRow
-          item={item}
-          today={today}
-          first={index === 0}
-          last={index === visible.length - 1}
-        />
-      )}
-      contentContainerStyle={{
-        paddingTop: insets.top + 12,
-        paddingBottom: rail.contentBottom,
-        paddingHorizontal: 20,
-      }}
-      style={styles.screen}
-    />
+    <FadeInScreen>
+      <FlatList
+        data={visible}
+        keyExtractor={(item) => item.id.toString()}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No recurring charges yet</Text>
+            <Text style={styles.emptyText}>
+              Add a subscription or service and get a reminder before each charge.
+            </Text>
+            <PressableScale
+              accessibilityRole="button"
+              onPress={() => router.push('/recurring/form')}
+              style={styles.emptyButton}>
+              <Text style={styles.emptyButtonLabel}>Add recurring</Text>
+            </PressableScale>
+          </View>
+        }
+        renderItem={({ item, index }) => (
+          <RecurringRow
+            item={item}
+            today={today}
+            first={index === 0}
+            last={index === visible.length - 1}
+          />
+        )}
+        contentContainerStyle={{
+          paddingTop: insets.top + 12,
+          paddingBottom: rail.contentBottom,
+          paddingHorizontal: 20,
+        }}
+        style={styles.screen}
+      />
+    </FadeInScreen>
   );
 }
 
@@ -154,7 +162,11 @@ function RecurringRow({
       onPress={() => router.push(`/recurring/${item.id}`)}
       style={[styles.row, first && styles.rowFirst, last && styles.rowLast]}>
       <View style={[styles.rowInner, !last && styles.rowDivider]}>
-        <CategoryTile icon={item.categoryIcon} color={item.categoryColor} tint={item.categoryTint} />
+        <CategoryTile
+          icon={item.categoryIcon}
+          color={item.categoryColor}
+          tint={item.categoryTint}
+        />
         <View style={styles.rowText}>
           <Text numberOfLines={1} style={styles.rowName}>
             {item.name}

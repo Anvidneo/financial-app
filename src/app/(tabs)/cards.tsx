@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTabRail } from '@/components/floating-tabs';
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
 import { listCards, listDebitCards, type CardWithSummary, type DebitCard } from '@/db/cards';
 import { formatDay, toDay } from '@/lib/dates';
@@ -19,97 +20,104 @@ export default function CardsScreen() {
   const today = toDay(new Date());
   const [cards, setCards] = useState<CardWithSummary[]>([]);
   const [debitCards, setDebitCards] = useState<DebitCard[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      listCards(db, today).then(setCards);
-      listDebitCards(db).then(setDebitCards);
+      Promise.all([listCards(db, today), listDebitCards(db)]).then(([cardRows, debitRows]) => {
+        setCards(cardRows);
+        setDebitCards(debitRows);
+        setLoaded(true);
+      });
     }, [db, today]),
   );
+
+  if (!loaded) return <ScreenSkeleton variant="list" />;
 
   const closed = cards.filter((card) => card.statement.closed);
   const toPay = closed.reduce((sum, card) => sum + card.statement.balanceCop, 0);
   const minimum = closed.reduce((sum, card) => sum + (card.statement.minimumCop ?? 0), 0);
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: rail.contentBottom },
-      ]}
-      style={styles.screen}
-    >
-      <View style={styles.titleRow}>
-        <View style={styles.titleButton} />
-        <Text accessibilityRole="header" style={styles.title}>
-          Cards
-        </Text>
-        <PressableScale
-          accessibilityLabel="Add card"
-          accessibilityRole="button"
-          onPress={() => router.push('/card/form')}
-          style={styles.titleButton}
-        >
-          <SymbolView name="plus" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
-
-      {cards.length === 0 && debitCards.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No cards yet</Text>
-          <Text style={styles.emptyText}>
-            Add your credit and debit cards to choose them when you pay.
+    <FadeInScreen>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 12, paddingBottom: rail.contentBottom },
+        ]}
+        style={styles.screen}>
+        <View style={styles.titleRow}>
+          <View style={styles.titleButton} />
+          <Text accessibilityRole="header" style={styles.title}>
+            Cards
           </Text>
           <PressableScale
+            accessibilityLabel="Add card"
             accessibilityRole="button"
             onPress={() => router.push('/card/form')}
-            style={styles.emptyButton}
-          >
-            <Text style={styles.emptyButtonLabel}>Add card</Text>
+            style={styles.titleButton}>
+            <SymbolView name="plus" size={18} tintColor={colors.ink} />
           </PressableScale>
         </View>
-      ) : (
-        <>
-          {cards.length > 0 && (
-            <View style={styles.summary}>
-              <Text style={styles.summaryLabel}>Total to pay this cycle</Text>
-              <Text style={styles.total}>{formatCop(toPay)}</Text>
-              {minimum > 0 && (
-                <Text style={styles.summaryLabel}>
-                  Minimum across cards{' '}
-                  <Text style={styles.summaryStrong}>{formatCop(minimum)}</Text>
-                </Text>
-              )}
-            </View>
-          )}
 
-          {cards.map((card, index) => (
-            <CardTile key={card.id} card={card} dark={index === 0} />
-          ))}
-
-          {debitCards.length > 0 && (
-            <>
-              <Text style={styles.section}>Debit cards</Text>
-              <View style={styles.debitList}>
-                {debitCards.map((card, index) => (
-                  <PressableScale
-                    key={card.id}
-                    accessibilityRole="button"
-                    onPress={() => router.push(`/card/form?debitId=${card.id}`)}
-                    style={[styles.debitRow, index < debitCards.length - 1 && styles.debitDivider]}
-                  >
-                    <Text numberOfLines={1} style={styles.debitName}>
-                      {card.name}
-                    </Text>
-                    <Text style={styles.debitDigits}>•••• {card.lastFour}</Text>
-                  </PressableScale>
-                ))}
+        {cards.length === 0 && debitCards.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No cards yet</Text>
+            <Text style={styles.emptyText}>
+              Add your credit and debit cards to choose them when you pay.
+            </Text>
+            <PressableScale
+              accessibilityRole="button"
+              onPress={() => router.push('/card/form')}
+              style={styles.emptyButton}>
+              <Text style={styles.emptyButtonLabel}>Add card</Text>
+            </PressableScale>
+          </View>
+        ) : (
+          <>
+            {cards.length > 0 && (
+              <View style={styles.summary}>
+                <Text style={styles.summaryLabel}>Total to pay this cycle</Text>
+                <Text style={styles.total}>{formatCop(toPay)}</Text>
+                {minimum > 0 && (
+                  <Text style={styles.summaryLabel}>
+                    Minimum across cards{' '}
+                    <Text style={styles.summaryStrong}>{formatCop(minimum)}</Text>
+                  </Text>
+                )}
               </View>
-            </>
-          )}
-        </>
-      )}
-    </ScrollView>
+            )}
+
+            {cards.map((card, index) => (
+              <CardTile key={card.id} card={card} dark={index === 0} />
+            ))}
+
+            {debitCards.length > 0 && (
+              <>
+                <Text style={styles.section}>Debit cards</Text>
+                <View style={styles.debitList}>
+                  {debitCards.map((card, index) => (
+                    <PressableScale
+                      key={card.id}
+                      accessibilityRole="button"
+                      onPress={() => router.push(`/card/form?debitId=${card.id}`)}
+                      style={[
+                        styles.debitRow,
+                        index < debitCards.length - 1 && styles.debitDivider,
+                      ]}>
+                      <Text numberOfLines={1} style={styles.debitName}>
+                        {card.name}
+                      </Text>
+                      <Text style={styles.debitDigits}>•••• {card.lastFour}</Text>
+                    </PressableScale>
+                  ))}
+                </View>
+              </>
+            )}
+          </>
+        )}
+      </ScrollView>
+    </FadeInScreen>
   );
 }
 
@@ -121,8 +129,7 @@ function CardTile({ card, dark }: { card: CardWithSummary; dark: boolean }) {
     <PressableScale
       accessibilityRole="button"
       onPress={() => router.push(`/card/${card.id}`)}
-      style={[styles.card, { backgroundColor: dark ? colors.pocket : colors.surface }]}
-    >
+      style={[styles.card, { backgroundColor: dark ? colors.pocket : colors.surface }]}>
       <View style={styles.cardRow}>
         <Text numberOfLines={1} style={[styles.cardName, { color: ink }]}>
           {card.name}

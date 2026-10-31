@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CategoryTile } from '@/components/category-tile';
 import { PressableScale } from '@/components/pressable-scale';
+import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
 import { deleteExpense, getExpense, type Expense } from '@/db/expenses';
 import { buildSchedule } from '@/lib/cards';
@@ -28,7 +29,7 @@ export default function ExpenseDetailScreen() {
     }, [db, id]),
   );
 
-  if (!expense) return <View style={styles.screen} />;
+  if (!expense) return <ScreenSkeleton variant="detail" />;
 
   const schedule =
     expense.cardCutOffDay !== null && expense.cardPaymentDay !== null
@@ -65,89 +66,89 @@ export default function ExpenseDetailScreen() {
   }
 
   return (
-    <View
-      style={[
-        styles.screen,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          Movement
-        </Text>
-        <PressableScale
-          accessibilityLabel="Edit movement"
-          accessibilityRole="button"
-          onPress={() => router.push(`/new-expense?id=${id}`)}
-          style={styles.headerButton}>
-          <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
-
-      <View style={styles.summary}>
-        <CategoryTile
-          icon={expense.categoryIcon}
-          color={expense.categoryColor}
-          tint={expense.categoryTint}
-        />
-        <Text numberOfLines={2} style={styles.merchant}>
-          {expense.merchant}
-        </Text>
-        <Text style={styles.amount}>{formatCop(expense.amountCop)}</Text>
-        {expense.recurring ? <Text style={styles.recurring}>Recurring</Text> : null}
-      </View>
-
-      <View style={styles.card}>
-        <View style={[styles.detail, styles.divider]}>
-          <Text style={styles.label}>Category</Text>
-          <Text style={styles.value}>{expense.categoryName}</Text>
+    <FadeInScreen>
+      <View
+        style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
+        <View style={styles.header}>
+          <PressableScale
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={styles.headerButton}>
+            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
+          </PressableScale>
+          <Text accessibilityRole="header" style={styles.title}>
+            Movement
+          </Text>
+          <PressableScale
+            accessibilityLabel="Edit movement"
+            accessibilityRole="button"
+            onPress={() => router.push(`/new-expense?id=${id}`)}
+            style={styles.headerButton}>
+            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
+          </PressableScale>
         </View>
-        <View style={[styles.detail, (paid || schedule || expense.accountName) && styles.divider]}>
-          <Text style={styles.label}>Date</Text>
-          <Text style={styles.value}>{formatDay(expense.spentOn)}</Text>
+
+        <View style={styles.summary}>
+          <CategoryTile
+            icon={expense.categoryIcon}
+            color={expense.categoryColor}
+            tint={expense.categoryTint}
+          />
+          <Text numberOfLines={2} style={styles.merchant}>
+            {expense.merchant}
+          </Text>
+          <Text style={styles.amount}>{formatCop(expense.amountCop)}</Text>
+          {expense.recurring ? <Text style={styles.recurring}>Recurring</Text> : null}
         </View>
-        {paid && (
-          <View style={[styles.detail, (schedule || expense.accountName) && styles.divider]}>
-            <Text style={styles.label}>Paid with</Text>
-            <Text style={styles.value}>{paid}</Text>
+
+        <View style={styles.card}>
+          <View style={[styles.detail, styles.divider]}>
+            <Text style={styles.label}>Category</Text>
+            <Text style={styles.value}>{expense.categoryName}</Text>
           </View>
-        )}
-        {expense.accountName && (
-          <View style={[styles.detail, schedule && styles.divider]}>
-            <Text style={styles.label}>From account</Text>
-            <Text style={styles.value}>{expense.accountName}</Text>
+          <View
+            style={[styles.detail, (paid || schedule || expense.accountName) && styles.divider]}>
+            <Text style={styles.label}>Date</Text>
+            <Text style={styles.value}>{formatDay(expense.spentOn)}</Text>
           </View>
-        )}
-        {schedule && (
-          <>
-            <View style={[styles.detail, styles.divider]}>
-              <Text style={styles.label}>Installments</Text>
-              <Text style={styles.value}>
-                {expense.interestRate > 0
-                  ? `${expense.installments} at ${expense.interestRate}%`
-                  : `${expense.installments} × ${formatCop(schedule[schedule.length - 1].amountCop)}`}
-              </Text>
+          {paid && (
+            <View style={[styles.detail, (schedule || expense.accountName) && styles.divider]}>
+              <Text style={styles.label}>Paid with</Text>
+              <Text style={styles.value}>{paid}</Text>
             </View>
-            <View style={styles.detail}>
-              <Text style={styles.label}>First due</Text>
-              <Text style={styles.value}>{formatDay(schedule[0].dueOn)}</Text>
+          )}
+          {expense.accountName && (
+            <View style={[styles.detail, schedule && styles.divider]}>
+              <Text style={styles.label}>From account</Text>
+              <Text style={styles.value}>{expense.accountName}</Text>
             </View>
-          </>
-        )}
+          )}
+          {schedule && (
+            <>
+              <View style={[styles.detail, styles.divider]}>
+                <Text style={styles.label}>Installments</Text>
+                <Text style={styles.value}>
+                  {expense.interestRate > 0
+                    ? `${expense.installments} at ${expense.interestRate}%`
+                    : `${expense.installments} × ${formatCop(schedule[schedule.length - 1].amountCop)}`}
+                </Text>
+              </View>
+              <View style={styles.detail}>
+                <Text style={styles.label}>First due</Text>
+                <Text style={styles.value}>{formatDay(schedule[0].dueOn)}</Text>
+              </View>
+            </>
+          )}
+        </View>
+
+        <View style={styles.spacer} />
+
+        <PressableScale accessibilityRole="button" onPress={confirmDelete} style={styles.delete}>
+          <Text style={styles.deleteLabel}>Delete movement</Text>
+        </PressableScale>
       </View>
-
-      <View style={styles.spacer} />
-
-      <PressableScale accessibilityRole="button" onPress={confirmDelete} style={styles.delete}>
-        <Text style={styles.deleteLabel}>Delete movement</Text>
-      </PressableScale>
-    </View>
+    </FadeInScreen>
   );
 }
 
