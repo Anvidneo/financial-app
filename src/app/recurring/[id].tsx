@@ -2,12 +2,13 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CategoryTile } from '@/components/category-tile';
 import { PressableScale } from '@/components/pressable-scale';
 import { ChargeStatus } from '@/components/status-label';
+import { Toggle } from '@/components/toggle';
 import { colors, radius } from '@/constants/theme';
 import {
   cancelRecurring,
@@ -104,12 +105,7 @@ export default function RecurringDetailScreen() {
           <Text style={styles.label}>
             Remind {item.remindDays} {item.remindDays === 1 ? 'day' : 'days'} before
           </Text>
-          <Switch
-            accessibilityLabel="Reminders"
-            onValueChange={toggleReminders}
-            trackColor={{ true: '#2E7D4F' }}
-            value={item.remindersOn}
-          />
+          <Toggle label="Reminders" value={item.remindersOn} onChange={toggleReminders} />
         </View>
       </View>
 
