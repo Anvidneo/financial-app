@@ -123,3 +123,39 @@ export async function updateExpense(
 export async function deleteExpense(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM expenses WHERE id = ?', id);
 }
+
+export type CategoryTotal = Category & { totalCop: number };
+
+export async function listCategoryTotals(
+  db: SQLiteDatabase,
+  month: string,
+): Promise<CategoryTotal[]> {
+  return db.getAllAsync<CategoryTotal>(
+    `SELECT c.id, c.name, c.icon, c.color, c.tint, SUM(e.amount_cop) AS totalCop
+     FROM expenses e
+     JOIN categories c ON c.id = e.category_id
+     WHERE substr(e.spent_on, 1, 7) = ?
+     GROUP BY c.id
+     ORDER BY totalCop DESC`,
+    month,
+  );
+}
+
+export async function listMonthTotals(
+  db: SQLiteDatabase,
+  months: string[],
+  categoryId: number | null,
+): Promise<number[]> {
+  const rows = await db.getAllAsync<{ month: string; totalCop: number }>(
+    `SELECT substr(spent_on, 1, 7) AS month, SUM(amount_cop) AS totalCop
+     FROM expenses
+     WHERE substr(spent_on, 1, 7) BETWEEN ? AND ?
+       AND (? IS NULL OR category_id = ?)
+     GROUP BY month`,
+    months[0],
+    months[months.length - 1],
+    categoryId,
+    categoryId,
+  );
+  return months.map((month) => rows.find((row) => row.month === month)?.totalCop ?? 0);
+}

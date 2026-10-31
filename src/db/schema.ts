@@ -92,6 +92,13 @@ const MIGRATIONS = [
 
   ALTER TABLE expenses ADD COLUMN debit_card_id INTEGER REFERENCES debit_cards (id);
   `,
+  `
+  CREATE TABLE accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    balance_cop INTEGER NOT NULL
+  );
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

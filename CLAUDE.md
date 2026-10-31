@@ -17,7 +17,7 @@ Native iPhone app for tracking my own expenses, recurring bills and credit cards
 | Local DB | SQLite (expo-sqlite or op-sqlite) |
 | Notifications | Local notifications (expo-notifications or Notifee) |
 | Animations | React Native Reanimated |
-| Charts | Victory Native |
+| Charts | Plain native views (Victory Native was not needed) |
 | CSV export | expo-file-system + expo-sharing (share sheet) |
 | Shortcuts link | Deep link (URL scheme) first; App Intents later if needed |
 
@@ -47,7 +47,7 @@ Reference: clean white cards on a light gray background, big numbers, colored ic
 4. **Home + charts**: wallet animation home screen; spending overview by category.
 5. **Automation + export**: deep link to register an expense; Shortcuts automation for Apple Pay (and bank messages); CSV export.
 
-Status: Phases 1-3 done. Next step is Phase 4. Install on the iPhone with `npm run ios:device`.
+Status: Phases 1-4 done. Next step is Phase 5. Install on the iPhone with `npm run ios:device`.
 
 ## Skills installed (.claude/skills)
 - Emil Kowalski (16): emil-design-eng, animate-expo (use for the wallet animation), review-animations, improve-animations, animation-performance, mobile-native, apple-design, etc.

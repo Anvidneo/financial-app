@@ -51,3 +51,17 @@ export function formatRelativeDay(day: string, today: string): string {
   if (day === addDays(today, -1)) return 'Yesterday';
   return formatDay(day);
 }
+
+export function lastMonths(month: string, count: number): string[] {
+  return Array.from({ length: count }, (_, index) => addMonths(month, index - count + 1));
+}
+
+export function formatShortMonth(month: string): string {
+  return MONTHS[Number(month.slice(5, 7)) - 1].slice(0, 3);
+}
+
+export function greeting(hour: number): string {
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}

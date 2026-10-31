@@ -1,185 +1,138 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CategoryTile } from '@/components/category-tile';
-import { Chip } from '@/components/chip';
 import { PressableScale } from '@/components/pressable-scale';
+import { ChargeStatus } from '@/components/status-label';
+import { Wallet } from '@/components/wallet';
 import { colors, radius } from '@/constants/theme';
-import { listCategories, listExpenses, type Category, type Expense } from '@/db/expenses';
-import { addMonths, formatDay, formatMonth, toDay, toMonth } from '@/lib/dates';
+import { listAccounts, type Account } from '@/db/accounts';
+import { listCards, type CardWithSummary } from '@/db/cards';
+import { listMonthTotals } from '@/db/expenses';
+import { listRecurring, type Recurring } from '@/db/recurring';
+import { formatDay, greeting, toDay, toMonth } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
-import { paymentLabel } from '@/lib/payment';
 
-export default function ExpensesScreen() {
+export default function HomeScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
-  const currentMonth = toMonth(toDay(new Date()));
-  const [month, setMonth] = useState(currentMonth);
-  const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const now = new Date();
+  const today = toDay(now);
+  const month = toMonth(today);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [cards, setCards] = useState<CardWithSummary[]>([]);
+  const [recurring, setRecurring] = useState<Recurring[]>([]);
+  const [spentCop, setSpentCop] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
-      listCategories(db).then(setCategories);
-      listExpenses(db, month, categoryId).then(setExpenses);
-    }, [db, month, categoryId]),
+      listAccounts(db).then(setAccounts);
+      listCards(db, today).then(setCards);
+      listRecurring(db, today).then(setRecurring);
+      listMonthTotals(db, [month], null).then(([total]) => setSpentCop(total));
+    }, [db, today, month]),
   );
 
-  const total = useMemo(
-    () => expenses.reduce((sum, expense) => sum + expense.amountCop, 0),
-    [expenses],
-  );
-
-  const header = (
-    <View style={styles.header}>
-      <Text accessibilityRole="header" style={styles.title}>
-        Expenses
-      </Text>
-
-      <View style={styles.summary}>
-        <View style={styles.monthRow}>
-          <MonthButton
-            icon="chevron.left"
-            label="Previous month"
-            onPress={() => setMonth(addMonths(month, -1))}
-          />
-          <Text style={styles.month}>{formatMonth(month)}</Text>
-          <MonthButton
-            icon="chevron.right"
-            label="Next month"
-            disabled={month === currentMonth}
-            onPress={() => setMonth(addMonths(month, 1))}
-          />
-        </View>
-        <Text style={styles.total}>{formatCop(total)}</Text>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-        style={styles.chipScroller}>
-        <Chip label="All" selected={categoryId === null} onPress={() => setCategoryId(null)} />
-        {categories.map((category) => (
-          <Chip
-            key={category.id}
-            label={category.name}
-            selected={categoryId === category.id}
-            onPress={() => setCategoryId(category.id)}
-          />
-        ))}
-      </ScrollView>
-
-      {expenses.length > 0 && <Text style={styles.section}>Movements</Text>}
-    </View>
-  );
+  const totalCop = accounts.reduce((sum, account) => sum + account.balanceCop, 0);
+  const nextCard = cards
+    .filter((card) => card.statement.balanceCop > 0)
+    .sort((a, b) => a.statement.dueOn.localeCompare(b.statement.dueOn))[0];
 
   return (
-    <View style={styles.screen}>
-      <FlatList
-        data={expenses}
-        keyExtractor={(expense) => expense.id.toString()}
-        ListHeaderComponent={header}
-        ListEmptyComponent={<EmptyMovements filtered={categoryId !== null} />}
-        renderItem={({ item, index }) => (
-          <ExpenseRow
-            expense={item}
-            first={index === 0}
-            last={index === expenses.length - 1}
-          />
-        )}
-        contentContainerStyle={{
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 110,
-          paddingHorizontal: 20,
-        }}
-      />
-    </View>
-  );
-}
-
-function MonthButton({
-  icon,
-  label,
-  disabled = false,
-  onPress,
-}: {
-  icon: 'chevron.left' | 'chevron.right';
-  label: string;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <PressableScale
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={styles.monthButton}>
-      <SymbolView
-        name={icon}
-        size={16}
-        tintColor={disabled ? colors.control : colors.muted}
-      />
-    </PressableScale>
-  );
-}
-
-function ExpenseRow({
-  expense,
-  first,
-  last,
-}: {
-  expense: Expense;
-  first: boolean;
-  last: boolean;
-}) {
-  const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
-
-  return (
-    <PressableScale
-      accessibilityRole="button"
-      onPress={() => router.push(`/expense/${expense.id}`)}
-      style={[styles.row, first && styles.rowFirst, last && styles.rowLast]}>
-      <View style={[styles.rowInner, !last && styles.rowDivider]}>
-        <CategoryTile
-          icon={expense.categoryIcon}
-          color={expense.categoryColor}
-          tint={expense.categoryTint}
-        />
-        <View style={styles.rowText}>
-          <Text numberOfLines={1} style={styles.rowName}>
-            {expense.merchant}
-          </Text>
-          <Text style={styles.rowDetail}>
-            {expense.categoryName}
-            {paid ? ` · ${paid}` : ''}
-            {expense.recurring ? <Text style={styles.recurring}> · Recurring</Text> : null}
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 110 },
+      ]}
+      style={styles.screen}>
+      <View style={styles.header}>
+        <View style={styles.greeting}>
+          <Text style={styles.hello}>{greeting(now.getHours())}</Text>
+          <Text accessibilityRole="header" style={styles.name}>
+            Juan
           </Text>
         </View>
-        <View style={styles.rowAmount}>
-          <Text style={styles.rowName}>{formatCop(expense.amountCop)}</Text>
-          <Text style={styles.rowDetail}>{formatDay(expense.spentOn)}</Text>
-        </View>
+        <PressableScale
+          accessibilityLabel="Accounts"
+          accessibilityRole="button"
+          onPress={() => router.push('/accounts')}
+          style={styles.headerButton}>
+          <SymbolView name="building.columns" size={20} tintColor={colors.ink} />
+        </PressableScale>
       </View>
-    </PressableScale>
-  );
-}
 
-function EmptyMovements({ filtered }: { filtered: boolean }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>
-        {filtered ? 'No movements in this category' : 'No movements this month'}
-      </Text>
-      <Text style={styles.emptyText}>Add one with the green plus button.</Text>
-    </View>
+      <Wallet
+        account={accounts[0] ?? null}
+        card={cards[0] ?? null}
+        totalCop={totalCop}
+        onEmptyPress={() => router.push('/accounts/form')}
+      />
+
+      <View style={styles.tiles}>
+        <PressableScale
+          accessibilityRole="button"
+          onPress={() => router.push('/expenses')}
+          style={styles.tile}>
+          <Text style={styles.tileLabel}>Spent this month</Text>
+          <Text style={styles.tileValue}>{formatCop(spentCop)}</Text>
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          onPress={() => router.push(nextCard ? `/card/${nextCard.id}` : '/cards')}
+          style={styles.tile}>
+          <Text style={styles.tileLabel}>
+            {nextCard ? `Card due ${formatDay(nextCard.statement.dueOn)}` : 'Card due'}
+          </Text>
+          <Text style={styles.tileValue}>
+            {formatCop(nextCard?.statement.balanceCop ?? 0)}
+          </Text>
+        </PressableScale>
+      </View>
+
+      <View style={styles.sectionRow}>
+        <Text style={styles.section}>Upcoming charges</Text>
+        <PressableScale
+          accessibilityRole="button"
+          onPress={() => router.push('/recurring')}
+          style={styles.seeAll}>
+          <Text style={styles.seeAllLabel}>See all</Text>
+        </PressableScale>
+      </View>
+
+      {recurring.length === 0 ? (
+        <Text style={styles.nothing}>Add subscriptions and services in Recurring.</Text>
+      ) : (
+        <View style={styles.list}>
+          {recurring.slice(0, 3).map((item, index, shown) => (
+            <PressableScale
+              key={item.id}
+              accessibilityRole="button"
+              onPress={() => router.push(`/recurring/${item.id}`)}
+              style={[styles.row, index < shown.length - 1 && styles.divider]}>
+              <CategoryTile
+                icon={item.categoryIcon}
+                color={item.categoryColor}
+                tint={item.categoryTint}
+              />
+              <View style={styles.rowText}>
+                <Text numberOfLines={1} style={styles.rowName}>
+                  {item.name}
+                </Text>
+                <Text style={styles.rowDetail}>{item.categoryName}</Text>
+              </View>
+              <View style={styles.rowAmount}>
+                <Text style={styles.rowName}>{formatCop(item.amountCop)}</Text>
+                <ChargeStatus nextChargeOn={item.nextChargeOn} lastPaidOn={null} today={today} />
+              </View>
+            </PressableScale>
+          ))}
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
@@ -188,80 +141,96 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  content: {
+    paddingHorizontal: 20,
     gap: 18,
-    marginBottom: 10,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-    textAlign: 'center',
-    lineHeight: 44,
-  },
-  summary: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.panel,
-    padding: 18,
-    gap: 4,
-  },
-  monthRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: -10,
-    marginVertical: -8,
   },
-  month: {
-    fontSize: 13,
+  greeting: {
+    gap: 2,
+  },
+  hello: {
+    fontSize: 14,
     color: colors.muted,
   },
-  monthButton: {
+  name: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  headerButton: {
     width: 44,
     height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  total: {
-    fontSize: 32,
+  tiles: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tile: {
+    flex: 1,
+    gap: 6,
+    padding: 16,
+    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+  },
+  tileLabel: {
+    fontSize: 12,
+    color: colors.muted,
+  },
+  tileValue: {
+    fontSize: 20,
     fontWeight: '700',
-    letterSpacing: -0.5,
     color: colors.ink,
     fontVariant: ['tabular-nums'],
   },
-  chipScroller: {
-    marginHorizontal: -20,
-  },
-  chips: {
-    gap: 8,
-    paddingHorizontal: 20,
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: -8,
   },
   section: {
     fontSize: 17,
     fontWeight: '700',
     color: colors.ink,
   },
-  row: {
+  seeAll: {
+    minHeight: 44,
+    paddingLeft: 12,
+    justifyContent: 'center',
+  },
+  seeAllLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.pocket,
+  },
+  nothing: {
+    fontSize: 14,
+    color: colors.muted,
+  },
+  list: {
+    borderRadius: radius.card,
     backgroundColor: colors.surface,
     paddingHorizontal: 16,
+    paddingVertical: 4,
   },
-  rowFirst: {
-    borderTopLeftRadius: radius.card,
-    borderTopRightRadius: radius.card,
-    paddingTop: 4,
-  },
-  rowLast: {
-    borderBottomLeftRadius: radius.card,
-    borderBottomRightRadius: radius.card,
-    paddingBottom: 4,
-  },
-  rowInner: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 11,
+    paddingVertical: 10,
   },
-  rowDivider: {
+  divider: {
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
@@ -271,7 +240,7 @@ const styles = StyleSheet.create({
   },
   rowAmount: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 4,
   },
   rowName: {
     fontSize: 15,
@@ -282,22 +251,5 @@ const styles = StyleSheet.create({
   rowDetail: {
     fontSize: 12,
     color: colors.muted,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 64,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.muted,
-  },
-  recurring: {
-    color: colors.recurring,
   },
 });

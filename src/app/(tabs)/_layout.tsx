@@ -13,6 +13,7 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.background },
       }}>
       <Tabs.Screen name="index" />
+      <Tabs.Screen name="expenses" />
       <Tabs.Screen name="recurring" />
       <Tabs.Screen name="cards" />
     </Tabs>

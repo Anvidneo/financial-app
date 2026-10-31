@@ -9,8 +9,9 @@ import { colors } from '@/constants/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
-const TABS: Record<string, { label: string; icon: SFSymbol; href: '/' | '/recurring' | '/cards' }> = {
-  index: { label: 'Expenses', icon: 'chart.bar', href: '/' },
+const TABS: Record<string, { label: string; icon: SFSymbol; href: '/' | '/expenses' | '/recurring' | '/cards' }> = {
+  index: { label: 'Home', icon: 'wallet.bifold', href: '/' },
+  expenses: { label: 'Expenses', icon: 'chart.bar', href: '/expenses' },
   recurring: { label: 'Recurring', icon: 'repeat', href: '/recurring' },
   cards: { label: 'Cards', icon: 'creditcard', href: '/cards' },
 };
