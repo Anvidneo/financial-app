@@ -5,7 +5,8 @@ set -eu
 
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
-DEVICE=00008140-001A3D380E0B001C
+DEVICE=$(xcrun devicectl list devices | grep physical | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)
+[ -n "$DEVICE" ] || { echo "Connect your iPhone first."; exit 1; }
 BUNDLE_ID=com.juandavidbotero.personalfinance
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
