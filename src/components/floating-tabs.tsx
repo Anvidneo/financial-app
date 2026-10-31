@@ -9,6 +9,8 @@ import { colors } from '@/constants/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
+const BUTTON_SIZE = 56;
+
 const TABS: Record<string, { label: string; icon: SFSymbol; href: '/' | '/expenses' | '/recurring' | '/cards' }> = {
   index: { label: 'Home', icon: 'wallet.bifold', href: '/' },
   expenses: { label: 'Expenses', icon: 'chart.bar', href: '/expenses' },
@@ -16,11 +18,29 @@ const TABS: Record<string, { label: string; icon: SFSymbol; href: '/' | '/expens
   cards: { label: 'Cards', icon: 'creditcard', href: '/cards' },
 };
 
+// Foldables keep a free column beside the screen, so the buttons move there and clear the content.
+export function useTabRail() {
+  const insets = useSafeAreaInsets();
+  const column = Math.max(insets.left, insets.right);
+  return {
+    visible: column >= BUTTON_SIZE,
+    side: insets.right >= insets.left ? ('right' as const) : ('left' as const),
+    offset: (column - BUTTON_SIZE) / 2,
+    contentBottom: insets.bottom + (column >= BUTTON_SIZE ? 16 : 110),
+  };
+}
+
 export function FloatingTabs({ state }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  const rail = useTabRail();
 
   return (
-    <View style={[styles.bar, { bottom: insets.bottom + 12 }]}>
+    <View
+      style={
+        rail.visible
+          ? [styles.rail, { bottom: insets.bottom + 12, [rail.side]: rail.offset }]
+          : [styles.bar, { bottom: insets.bottom + 12 }]
+      }>
       {state.routes.map((route, index) => {
         const tab = TABS[route.name];
         const selected = state.index === index;
@@ -60,9 +80,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
+  rail: {
+    position: 'absolute',
+    gap: 10,
+  },
   button: {
-    width: 56,
-    height: 56,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',

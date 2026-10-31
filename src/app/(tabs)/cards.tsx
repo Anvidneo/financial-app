@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabRail } from '@/components/floating-tabs';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { listCards, listDebitCards, type CardWithSummary, type DebitCard } from '@/db/cards';
@@ -14,6 +15,7 @@ import { formatCop } from '@/lib/money';
 export default function CardsScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
+  const rail = useTabRail();
   const today = toDay(new Date());
   const [cards, setCards] = useState<CardWithSummary[]>([]);
   const [debitCards, setDebitCards] = useState<DebitCard[]>([]);
@@ -33,7 +35,7 @@ export default function CardsScreen() {
     <ScrollView
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 110 },
+        { paddingTop: insets.top + 12, paddingBottom: rail.contentBottom },
       ]}
       style={styles.screen}
     >

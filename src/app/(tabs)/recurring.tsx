@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabRail } from '@/components/floating-tabs';
 import { CategoryTile } from '@/components/category-tile';
 import { Chip } from '@/components/chip';
 import { PressableScale } from '@/components/pressable-scale';
@@ -19,6 +20,7 @@ import { remindersAllowed } from '@/lib/reminders';
 export default function RecurringScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
+  const rail = useTabRail();
   const today = toDay(new Date());
   const [items, setItems] = useState<Recurring[]>([]);
   const [category, setCategory] = useState<string | null>(null);
@@ -127,7 +129,7 @@ export default function RecurringScreen() {
       )}
       contentContainerStyle={{
         paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 110,
+        paddingBottom: rail.contentBottom,
         paddingHorizontal: 20,
       }}
       style={styles.screen}

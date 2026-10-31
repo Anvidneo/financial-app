@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabRail } from '@/components/floating-tabs';
 import { CategoryTile } from '@/components/category-tile';
 import { MonthBars } from '@/components/month-bars';
 import { Chip } from '@/components/chip';
@@ -24,6 +25,7 @@ import { paymentLabel } from '@/lib/payment';
 export default function ExpensesScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
+  const rail = useTabRail();
   const currentMonth = toMonth(toDay(new Date()));
   const [month, setMonth] = useState(currentMonth);
   const [categoryId, setCategoryId] = useState<number | null>(null);
@@ -114,7 +116,7 @@ export default function ExpensesScreen() {
         )}
         contentContainerStyle={{
           paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 110,
+          paddingBottom: rail.contentBottom,
           paddingHorizontal: 20,
         }}
       />

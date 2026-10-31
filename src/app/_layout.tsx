@@ -49,7 +49,10 @@ function Screens() {
         headerShown: false,
         contentStyle: { backgroundColor: colors.background, ...sides },
       }}>
-      <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+          name="(tabs)"
+          options={{ contentStyle: { backgroundColor: colors.background } }}
+        />
       <Stack.Screen name="new-expense" options={{ presentation: 'modal' }} />
       <Stack.Screen name="expense/[id]" />
       <Stack.Screen name="accounts/index" />
