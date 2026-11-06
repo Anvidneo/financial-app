@@ -10,6 +10,7 @@ export const colors = {
   recurring: '#2360D9',
   danger: '#A82C2C',
   credit: '#2F6FED',
+  paidNow: '#2FB36B',
 };
 
 export const radius = {

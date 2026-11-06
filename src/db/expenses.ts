@@ -1,6 +1,6 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from "expo-sqlite";
 
-import type { PaymentMethod } from '@/lib/payment';
+import type { PaymentMethod } from "@/lib/payment";
 
 export type Category = {
   id: number;
@@ -48,7 +48,7 @@ export type NewExpense = {
 
 export function listCategories(db: SQLiteDatabase): Promise<Category[]> {
   return db.getAllAsync<Category>(
-    'SELECT id, name, icon, color, tint FROM categories ORDER BY sort_order',
+    "SELECT id, name, icon, color, tint FROM categories ORDER BY sort_order",
   );
 }
 
@@ -84,11 +84,17 @@ export function listExpenses(
   );
 }
 
-export function getExpense(db: SQLiteDatabase, id: number): Promise<Expense | null> {
+export function getExpense(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<Expense | null> {
   return db.getFirstAsync<Expense>(`${SELECT_EXPENSE} WHERE e.id = ?`, id);
 }
 
-export async function addExpense(db: SQLiteDatabase, expense: NewExpense): Promise<number> {
+export async function addExpense(
+  db: SQLiteDatabase,
+  expense: NewExpense,
+): Promise<number> {
   const result = await db.runAsync(
     `INSERT INTO expenses
        (merchant, amount_cop, category_id, spent_on, payment_method, card_id, debit_card_id,
@@ -133,8 +139,11 @@ export async function updateExpense(
   );
 }
 
-export async function deleteExpense(db: SQLiteDatabase, id: number): Promise<void> {
-  await db.runAsync('DELETE FROM expenses WHERE id = ?', id);
+export async function deleteExpense(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<void> {
+  await db.runAsync("DELETE FROM expenses WHERE id = ?", id);
 }
 
 export type CategoryTotal = Category & { totalCop: number };
@@ -169,11 +178,42 @@ export async function listMonthTotals(
     categoryId,
     categoryId,
   );
-  return months.map((month) => rows.find((row) => row.month === month)?.totalCop ?? 0);
+  return months.map(
+    (month) => rows.find((row) => row.month === month)?.totalCop ?? 0,
+  );
+}
+
+export type DayTotal = { day: string; cardCop: number; otherCop: number };
+
+// Splits each day into what went on a credit card and what was paid right away.
+export async function listDailyTotals(
+  db: SQLiteDatabase,
+  days: string[],
+  categoryId: number | null,
+): Promise<DayTotal[]> {
+  const rows = await db.getAllAsync<DayTotal>(
+    `SELECT spent_on AS day,
+            SUM(CASE WHEN payment_method = 'card' THEN amount_cop ELSE 0 END) AS cardCop,
+            SUM(CASE WHEN payment_method = 'card' THEN 0 ELSE amount_cop END) AS otherCop
+     FROM expenses
+     WHERE spent_on BETWEEN ? AND ?
+       AND (? IS NULL OR category_id = ?)
+     GROUP BY spent_on`,
+    days[0],
+    days[days.length - 1],
+    categoryId,
+    categoryId,
+  );
+  return days.map(
+    (day) =>
+      rows.find((row) => row.day === day) ?? { day, cardCop: 0, otherCop: 0 },
+  );
 }
 
 export function listAllExpenses(db: SQLiteDatabase): Promise<Expense[]> {
-  return db.getAllAsync<Expense>(`${SELECT_EXPENSE} ORDER BY e.spent_on DESC, e.id DESC`);
+  return db.getAllAsync<Expense>(
+    `${SELECT_EXPENSE} ORDER BY e.spent_on DESC, e.id DESC`,
+  );
 }
 
 export async function setExpenseCategory(
@@ -181,7 +221,11 @@ export async function setExpenseCategory(
   id: number,
   categoryId: number,
 ): Promise<void> {
-  await db.runAsync('UPDATE expenses SET category_id = ? WHERE id = ?', categoryId, id);
+  await db.runAsync(
+    "UPDATE expenses SET category_id = ? WHERE id = ?",
+    categoryId,
+    id,
+  );
 }
 
 // A merchant keeps the category it had last time.
@@ -218,16 +262,22 @@ export async function findRecentExpense(
   return row?.id ?? null;
 }
 
-export type CategoryInput = Omit<Category, 'id'>;
+export type CategoryInput = Omit<Category, "id">;
 
-export function getCategory(db: SQLiteDatabase, id: number): Promise<Category | null> {
+export function getCategory(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<Category | null> {
   return db.getFirstAsync<Category>(
-    'SELECT id, name, icon, color, tint FROM categories WHERE id = ?',
+    "SELECT id, name, icon, color, tint FROM categories WHERE id = ?",
     id,
   );
 }
 
-export async function addCategory(db: SQLiteDatabase, input: CategoryInput): Promise<void> {
+export async function addCategory(
+  db: SQLiteDatabase,
+  input: CategoryInput,
+): Promise<void> {
   await db.runAsync(
     `INSERT INTO categories (name, icon, color, tint, sort_order)
      VALUES (?, ?, ?, ?, (SELECT IFNULL(MAX(sort_order), 0) + 1 FROM categories))`,
@@ -244,7 +294,7 @@ export async function updateCategory(
   input: CategoryInput,
 ): Promise<void> {
   await db.runAsync(
-    'UPDATE categories SET name = ?, icon = ?, color = ?, tint = ? WHERE id = ?',
+    "UPDATE categories SET name = ?, icon = ?, color = ?, tint = ? WHERE id = ?",
     input.name.trim(),
     input.icon,
     input.color,
@@ -253,7 +303,10 @@ export async function updateCategory(
   );
 }
 
-export async function countCategoryUses(db: SQLiteDatabase, id: number): Promise<number> {
+export async function countCategoryUses(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<number> {
   const row = await db.getFirstAsync<{ total: number }>(
     `SELECT (SELECT COUNT(*) FROM expenses WHERE category_id = ?) +
             (SELECT COUNT(*) FROM recurring WHERE category_id = ?) AS total`,
@@ -263,6 +316,9 @@ export async function countCategoryUses(db: SQLiteDatabase, id: number): Promise
   return row?.total ?? 0;
 }
 
-export async function deleteCategory(db: SQLiteDatabase, id: number): Promise<void> {
-  await db.runAsync('DELETE FROM categories WHERE id = ?', id);
+export async function deleteCategory(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<void> {
+  await db.runAsync("DELETE FROM categories WHERE id = ?", id);
 }

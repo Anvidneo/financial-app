@@ -1,27 +1,38 @@
-import { router, useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router, useFocusEffect } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
+import { SymbolView } from "expo-symbols";
+import { useCallback, useMemo, useState } from "react";
+import { FlatList, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useTabRail } from '@/components/floating-tabs';
-import { CategoryTile } from '@/components/category-tile';
-import { MonthBars } from '@/components/month-bars';
-import { Chip } from '@/components/chip';
-import { PressableScale } from '@/components/pressable-scale';
-import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
-import { colors, radius } from '@/constants/theme';
+import { useTabRail } from "@/components/floating-tabs";
+import { CategoryTile } from "@/components/category-tile";
+import { ChartLegend, DailyBars } from "@/components/daily-bars";
+import { MonthBars } from "@/components/month-bars";
+import { Chip } from "@/components/chip";
+import { PressableScale } from "@/components/pressable-scale";
+import { FadeInScreen, ScreenSkeleton } from "@/components/skeleton";
+import { colors, radius } from "@/constants/theme";
 import {
   listCategories,
+  listDailyTotals,
   listExpenses,
   listMonthTotals,
   type Category,
+  type DayTotal,
   type Expense,
-} from '@/db/expenses';
-import { addMonths, formatDay, formatMonth, lastMonths, toDay, toMonth } from '@/lib/dates';
-import { formatCop } from '@/lib/money';
-import { paymentLabel } from '@/lib/payment';
+} from "@/db/expenses";
+import {
+  addMonths,
+  daysOfMonth,
+  formatDay,
+  formatMonth,
+  lastMonths,
+  toDay,
+  toMonth,
+} from "@/lib/dates";
+import { formatCop } from "@/lib/money";
+import { paymentLabel } from "@/lib/payment";
 
 export default function ExpensesScreen() {
   const db = useSQLiteContext();
@@ -35,6 +46,10 @@ export default function ExpensesScreen() {
   const [loaded, setLoaded] = useState(false);
   const [monthTotals, setMonthTotals] = useState<number[]>([]);
   const chartMonths = useMemo(() => lastMonths(month, 5), [month]);
+  const chartDays = useMemo(() => daysOfMonth(month), [month]);
+  const [dayTotals, setDayTotals] = useState<DayTotal[]>([]);
+  const [view, setView] = useState<"days" | "months">("days");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -42,19 +57,28 @@ export default function ExpensesScreen() {
         listCategories(db),
         listExpenses(db, month, categoryId),
         listMonthTotals(db, chartMonths, categoryId),
-      ]).then(([categoryRows, expenseRows, totals]) => {
+        listDailyTotals(db, chartDays, categoryId),
+      ]).then(([categoryRows, expenseRows, totals, daily]) => {
         setCategories(categoryRows);
         setExpenses(expenseRows);
         setMonthTotals(totals);
+        setDayTotals(daily);
         setLoaded(true);
       });
-    }, [db, month, categoryId, chartMonths]),
+    }, [db, month, categoryId, chartMonths, chartDays]),
   );
 
   const total = useMemo(
     () => expenses.reduce((sum, expense) => sum + expense.amountCop, 0),
     [expenses],
   );
+
+  const selected = dayTotals.find((day) => day.day === selectedDay) ?? null;
+
+  function changeMonth(amount: number) {
+    setSelectedDay(null);
+    setMonth(addMonths(month, amount));
+  }
 
   if (!loaded) return <ScreenSkeleton variant="list" />;
 
@@ -69,24 +93,48 @@ export default function ExpensesScreen() {
           <MonthButton
             icon="chevron.left"
             label="Previous month"
-            onPress={() => setMonth(addMonths(month, -1))}
+            onPress={() => changeMonth(-1)}
           />
           <Text style={styles.month}>{formatMonth(month)}</Text>
           <MonthButton
             icon="chevron.right"
             label="Next month"
             disabled={month === currentMonth}
-            onPress={() => setMonth(addMonths(month, 1))}
+            onPress={() => changeMonth(1)}
           />
         </View>
-        <Text style={styles.total}>{formatCop(total)}</Text>
-        <MonthBars months={chartMonths} totals={monthTotals} />
+        <Text style={styles.overview}>
+          {selected ? formatDay(selected.day) : "Spending overview"}
+        </Text>
+        <Text style={styles.total}>
+          {formatCop(selected ? selected.cardCop + selected.otherCop : total)}
+        </Text>
+        <View style={styles.chartBar}>
+          {view === "days" ? <ChartLegend /> : <View />}
+          <ViewToggle
+            value={view}
+            onChange={(next) => {
+              setSelectedDay(null);
+              setView(next);
+            }}
+          />
+        </View>
+        {view === "days" ? (
+          <DailyBars
+            days={dayTotals}
+            selected={selectedDay}
+            onSelect={setSelectedDay}
+          />
+        ) : (
+          <MonthBars months={chartMonths} totals={monthTotals} />
+        )}
       </View>
 
       <PressableScale
         accessibilityRole="button"
         onPress={() => router.push(`/categories?month=${month}`)}
-        style={styles.byCategory}>
+        style={styles.byCategory}
+      >
         <Text style={styles.byCategoryLabel}>Spending by category</Text>
         <SymbolView name="chevron.right" size={14} tintColor={colors.muted} />
       </PressableScale>
@@ -95,8 +143,13 @@ export default function ExpensesScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chips}
-        style={styles.chipScroller}>
-        <Chip label="All" selected={categoryId === null} onPress={() => setCategoryId(null)} />
+        style={styles.chipScroller}
+      >
+        <Chip
+          label="All"
+          selected={categoryId === null}
+          onPress={() => setCategoryId(null)}
+        />
         {categories.map((category) => (
           <Chip
             key={category.id}
@@ -120,7 +173,11 @@ export default function ExpensesScreen() {
           ListHeaderComponent={header}
           ListEmptyComponent={<EmptyMovements filtered={categoryId !== null} />}
           renderItem={({ item, index }) => (
-            <ExpenseRow expense={item} first={index === 0} last={index === expenses.length - 1} />
+            <ExpenseRow
+              expense={item}
+              first={index === 0}
+              last={index === expenses.length - 1}
+            />
           )}
           contentContainerStyle={{
             paddingTop: insets.top + 12,
@@ -133,13 +190,44 @@ export default function ExpensesScreen() {
   );
 }
 
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: "days" | "months";
+  onChange: (value: "days" | "months") => void;
+}) {
+  return (
+    <View style={styles.toggle}>
+      {(["days", "months"] as const).map((option) => (
+        <PressableScale
+          key={option}
+          accessibilityRole="button"
+          accessibilityState={{ selected: value === option }}
+          onPress={() => onChange(option)}
+          style={[styles.toggleOption, value === option && styles.toggleActive]}
+        >
+          <Text
+            style={[
+              styles.toggleLabel,
+              value === option && styles.toggleLabelActive,
+            ]}
+          >
+            {option === "days" ? "Days" : "Months"}
+          </Text>
+        </PressableScale>
+      ))}
+    </View>
+  );
+}
+
 function MonthButton({
   icon,
   label,
   disabled = false,
   onPress,
 }: {
-  icon: 'chevron.left' | 'chevron.right';
+  icon: "chevron.left" | "chevron.right";
   label: string;
   disabled?: boolean;
   onPress: () => void;
@@ -151,20 +239,34 @@ function MonthButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={styles.monthButton}>
-      <SymbolView name={icon} size={16} tintColor={disabled ? colors.control : colors.muted} />
+      style={styles.monthButton}
+    >
+      <SymbolView
+        name={icon}
+        size={16}
+        tintColor={disabled ? colors.control : colors.muted}
+      />
     </PressableScale>
   );
 }
 
-function ExpenseRow({ expense, first, last }: { expense: Expense; first: boolean; last: boolean }) {
+function ExpenseRow({
+  expense,
+  first,
+  last,
+}: {
+  expense: Expense;
+  first: boolean;
+  last: boolean;
+}) {
   const paid = paymentLabel(expense.paymentMethod, expense.cardLabel);
 
   return (
     <PressableScale
       accessibilityRole="button"
       onPress={() => router.push(`/expense/${expense.id}`)}
-      style={[styles.row, first && styles.rowFirst, last && styles.rowLast]}>
+      style={[styles.row, first && styles.rowFirst, last && styles.rowLast]}
+    >
       <View style={[styles.rowInner, !last && styles.rowDivider]}>
         <CategoryTile
           icon={expense.categoryIcon}
@@ -177,8 +279,10 @@ function ExpenseRow({ expense, first, last }: { expense: Expense; first: boolean
           </Text>
           <Text style={styles.rowDetail}>
             {expense.categoryName}
-            {paid ? ` · ${paid}` : ''}
-            {expense.recurring ? <Text style={styles.recurring}> · Recurring</Text> : null}
+            {paid ? ` · ${paid}` : ""}
+            {expense.recurring ? (
+              <Text style={styles.recurring}> · Recurring</Text>
+            ) : null}
           </Text>
         </View>
         <View style={styles.rowAmount}>
@@ -194,7 +298,7 @@ function EmptyMovements({ filtered }: { filtered: boolean }) {
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyTitle}>
-        {filtered ? 'No movements in this category' : 'No movements this month'}
+        {filtered ? "No movements in this category" : "No movements this month"}
       </Text>
       <Text style={styles.emptyText}>Add one with the green plus button.</Text>
     </View>
@@ -212,9 +316,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.ink,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 44,
   },
   summary: {
@@ -224,9 +328,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   monthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginHorizontal: -10,
     marginVertical: -8,
   },
@@ -237,20 +341,54 @@ const styles = StyleSheet.create({
   monthButton: {
     width: 44,
     height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  overview: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.ink,
+    marginTop: 6,
+  },
+  chartBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  toggle: {
+    flexDirection: "row",
+    padding: 2,
+    borderRadius: 10,
+    backgroundColor: colors.control,
+  },
+  toggleOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  toggleActive: {
+    backgroundColor: colors.surface,
+  },
+  toggleLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  toggleLabelActive: {
+    color: colors.ink,
   },
   total: {
     fontSize: 32,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -0.5,
     color: colors.ink,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   byCategory: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     minHeight: 48,
     paddingHorizontal: 16,
     borderRadius: radius.card,
@@ -258,7 +396,7 @@ const styles = StyleSheet.create({
   },
   byCategoryLabel: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.ink,
   },
   chipScroller: {
@@ -270,7 +408,7 @@ const styles = StyleSheet.create({
   },
   section: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.ink,
   },
   row: {
@@ -288,8 +426,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   rowInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     paddingVertical: 11,
   },
@@ -302,27 +440,27 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowAmount: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     gap: 2,
   },
   rowName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.ink,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   rowDetail: {
     fontSize: 12,
     color: colors.muted,
   },
   empty: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: 6,
     paddingVertical: 64,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.ink,
   },
   emptyText: {
