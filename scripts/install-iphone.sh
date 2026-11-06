@@ -10,6 +10,10 @@ DEVICE=$(xcrun devicectl list devices | grep physical | grep -oE '[0-9A-F]{8}-[0
 BUNDLE_ID=com.juandavidbotero.personalfinance
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
+# Xcode reuses a cached profile while it is still valid, so remove it to get a fresh 7 days.
+PROFILES="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+grep -l "$BUNDLE_ID" "$PROFILES"/*.mobileprovision 2>/dev/null | while read -r profile; do rm "$profile"; done
+
 [ -d "$ROOT/ios" ] || (cd "$ROOT" && npx expo prebuild --platform ios)
 
 cd "$ROOT/ios"
