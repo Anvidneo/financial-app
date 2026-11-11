@@ -5,7 +5,8 @@ set -eu
 
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
-DEVICE=$(xcrun devicectl list devices | grep physical | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)
+# Pass DEVICE=<udid> to choose a phone when more than one is connected.
+DEVICE=${DEVICE:-$(xcrun devicectl list devices | grep physical | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)}
 [ -n "$DEVICE" ] || { echo "Connect your iPhone first."; exit 1; }
 BUNDLE_ID=com.juandavidbotero.personalfinance
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
