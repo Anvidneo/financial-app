@@ -1,58 +1,43 @@
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader, PageScreen } from '@/components/page';
 import { CategoryTile } from '@/components/category-tile';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { listCategoryTotals, type CategoryTotal } from '@/db/expenses';
 import { formatMonth, toDay, toMonth } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
+import { useLoad } from '@/lib/use-load';
 
 export default function CategoriesScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ month?: string }>();
   const month = params.month ?? toMonth(toDay(new Date()));
   const [totals, setTotals] = useState<CategoryTotal[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      listCategoryTotals(db, month).then(setTotals);
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      setTotals(await listCategoryTotals(db, month));
     }, [db, month]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   const totalCop = totals.reduce((sum, category) => sum + category.totalCop, 0);
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          Categories
-        </Text>
-        <PressableScale
-          accessibilityLabel="Add category"
-          accessibilityRole="button"
-          onPress={() => router.push('/category/form')}
-          style={styles.headerButton}>
-          <SymbolView name="plus" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
+    <PageScreen gap={18}>
+      <PageHeader
+        title="Categories"
+        action={{
+          icon: 'plus',
+          label: 'Add category',
+          onPress: () => router.push('/category/form'),
+        }}
+      />
 
       <View style={styles.total}>
         <Text style={styles.month}>{formatMonth(month)}</Text>
@@ -89,35 +74,11 @@ export default function CategoriesScreen() {
           ))}
         </View>
       )}
-    </ScrollView>
+    </PageScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 18,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
   total: {
     alignItems: 'center',
     gap: 6,

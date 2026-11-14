@@ -1,10 +1,10 @@
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader, PageScreen } from '@/components/page';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
@@ -12,21 +12,23 @@ import { getCard, setStatementMinimum, type CardWithSummary } from '@/db/cards';
 import type { StatementItem } from '@/lib/cards';
 import { formatDay, toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
+import { runAction } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 export default function CardDetailScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
   const today = toDay(new Date());
   const [card, setCard] = useState<CardWithSummary | null>(null);
 
-  const load = useCallback(() => {
-    getCard(db, id, today).then(setCard);
-  }, [db, id, today]);
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      setCard(await getCard(db, id, today));
+    }, [db, id, today]),
+  );
 
-  useFocusEffect(load);
-
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!card) return <ScreenSkeleton variant="detail" />;
 
   const { statement } = card;
@@ -36,11 +38,13 @@ export default function CardDetailScreen() {
     Alert.prompt(
       'Minimum payment',
       'Enter the amount from your statement.',
-      async (text) => {
+      (text) => {
         const minimumCop = Number(text.replace(/\D/g, ''));
         if (minimumCop <= 0) return;
-        await setStatementMinimum(db, id, statement.cutOffOn, minimumCop);
-        load();
+        runAction('Minimum not saved', async () => {
+          await setStatementMinimum(db, id, statement.cutOffOn, minimumCop);
+          retry();
+        });
       },
       'plain-text',
       statement.minimumCop?.toString() ?? '',
@@ -50,31 +54,15 @@ export default function CardDetailScreen() {
 
   return (
     <FadeInScreen>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-        ]}
-        style={styles.screen}>
-        <View style={styles.header}>
-          <PressableScale
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={styles.headerButton}>
-            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-          </PressableScale>
-          <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
-            {card.name} •••• {card.lastFour}
-          </Text>
-          <PressableScale
-            accessibilityLabel="Edit card"
-            accessibilityRole="button"
-            onPress={() => router.push(`/card/form?id=${id}`)}
-            style={styles.headerButton}>
-            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-          </PressableScale>
-        </View>
+      <PageScreen gap={16}>
+        <PageHeader
+          title={`${card.name} •••• ${card.lastFour}`}
+          action={{
+            icon: 'pencil',
+            label: 'Edit card',
+            onPress: () => router.push(`/card/form?id=${id}`),
+          }}
+        />
 
         <View style={styles.balance}>
           <Text style={styles.label}>
@@ -155,7 +143,7 @@ export default function CardDetailScreen() {
             )}
           </>
         )}
-      </ScrollView>
+      </PageScreen>
     </FadeInScreen>
   );
 }
@@ -219,32 +207,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.muted,
     fontVariant: ['tabular-nums'],
-  },
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-    textAlign: 'center',
   },
   balance: {
     alignItems: 'center',

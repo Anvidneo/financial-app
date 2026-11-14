@@ -1,17 +1,19 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EmptyState, Strong, SummaryCard, TabTitle } from '@/components/tab-parts';
 import { useTabRail } from '@/components/floating-tabs';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
 import { listCards, listDebitCards, type CardWithSummary, type DebitCard } from '@/db/cards';
 import { formatDay, toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
+import { useLoad } from '@/lib/use-load';
 
 export default function CardsScreen() {
   const db = useSQLiteContext();
@@ -22,16 +24,19 @@ export default function CardsScreen() {
   const [debitCards, setDebitCards] = useState<DebitCard[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      Promise.all([listCards(db, today), listDebitCards(db)]).then(([cardRows, debitRows]) => {
-        setCards(cardRows);
-        setDebitCards(debitRows);
-        setLoaded(true);
-      });
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      await Promise.all([listCards(db, today), listDebitCards(db)]).then(
+        ([cardRows, debitRows]) => {
+          setCards(cardRows);
+          setDebitCards(debitRows);
+          setLoaded(true);
+        },
+      );
     }, [db, today]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!loaded) return <ScreenSkeleton variant="list" />;
 
   const closed = cards.filter((card) => card.statement.closed);
@@ -46,46 +51,27 @@ export default function CardsScreen() {
           { paddingTop: insets.top + 12, paddingBottom: rail.contentBottom },
         ]}
         style={styles.screen}>
-        <View style={styles.titleRow}>
-          <View style={styles.titleButton} />
-          <Text accessibilityRole="header" style={styles.title}>
-            Cards
-          </Text>
-          <PressableScale
-            accessibilityLabel="Add card"
-            accessibilityRole="button"
-            onPress={() => router.push('/card/form')}
-            style={styles.titleButton}>
-            <SymbolView name="plus" size={18} tintColor={colors.ink} />
-          </PressableScale>
-        </View>
+        <TabTitle
+          title="Cards"
+          add={{ label: 'Add card', onPress: () => router.push('/card/form') }}
+        />
 
         {cards.length === 0 && debitCards.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No cards yet</Text>
-            <Text style={styles.emptyText}>
-              Add your credit and debit cards to choose them when you pay.
-            </Text>
-            <PressableScale
-              accessibilityRole="button"
-              onPress={() => router.push('/card/form')}
-              style={styles.emptyButton}>
-              <Text style={styles.emptyButtonLabel}>Add card</Text>
-            </PressableScale>
-          </View>
+          <EmptyState
+            title="No cards yet"
+            text="Add your credit and debit cards to choose them when you pay."
+            action={{ label: 'Add card', onPress: () => router.push('/card/form') }}
+          />
         ) : (
           <>
             {cards.length > 0 && (
-              <View style={styles.summary}>
-                <Text style={styles.summaryLabel}>Total to pay this cycle</Text>
-                <Text style={styles.total}>{formatCop(toPay)}</Text>
-                {minimum > 0 && (
-                  <Text style={styles.summaryLabel}>
-                    Minimum across cards{' '}
-                    <Text style={styles.summaryStrong}>{formatCop(minimum)}</Text>
-                  </Text>
-                )}
-              </View>
+              <SummaryCard label="Total to pay this cycle" amount={formatCop(toPay)}>
+                {minimum > 0 ? (
+                  <>
+                    Minimum across cards <Strong>{formatCop(minimum)}</Strong>
+                  </>
+                ) : null}
+              </SummaryCard>
             )}
 
             {cards.map((card, index) => (
@@ -160,43 +146,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 18,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  titleButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  summary: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.panel,
-    padding: 18,
-    gap: 4,
-  },
-  summaryLabel: {
-    fontSize: 13,
-    color: colors.muted,
-  },
-  summaryStrong: {
-    fontWeight: '600',
-    color: colors.ink,
-  },
-  total: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    color: colors.ink,
-    fontVariant: ['tabular-nums'],
-  },
   section: {
     fontSize: 17,
     fontWeight: '700',
@@ -268,36 +217,5 @@ const styles = StyleSheet.create({
   cardDue: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  empty: {
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 96,
-    paddingHorizontal: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  emptyText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.muted,
-    textAlign: 'center',
-  },
-  emptyButton: {
-    alignSelf: 'stretch',
-    height: 56,
-    marginTop: 10,
-    borderRadius: radius.card,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyButtonLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.surface,
   },
 });

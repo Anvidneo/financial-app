@@ -9,6 +9,7 @@ import { addExpense, findRecentExpense, guessCategoryId, type NewExpense } from 
 import { toDay } from '@/lib/dates';
 import { lastFourDigits, parseAmount, parseBankMessage } from '@/lib/incoming';
 import { syncReminders } from '@/lib/reminders';
+import { reportFailure } from '@/lib/report';
 
 type Params = {
   amount?: string;
@@ -69,7 +70,10 @@ export default function AddFromLinkScreen() {
       router.replace(`/quick/${id}`);
     }
 
-    register();
+    register().catch((error: unknown) => {
+      reportFailure('Payment not saved')(error);
+      router.replace('/');
+    });
   }, [db, params]);
 
   return <View style={{ flex: 1, backgroundColor: colors.background }} />;

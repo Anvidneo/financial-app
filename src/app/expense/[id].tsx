@@ -1,11 +1,12 @@
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PageHeader } from '@/components/page';
 import { CategoryTile } from '@/components/category-tile';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
@@ -15,6 +16,8 @@ import { formatDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 import { paymentLabel } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
+import { runAction } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 export default function ExpenseDetailScreen() {
   const db = useSQLiteContext();
@@ -23,12 +26,13 @@ export default function ExpenseDetailScreen() {
   const id = Number(params.id);
   const [expense, setExpense] = useState<Expense | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      getExpense(db, id).then(setExpense);
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      setExpense(await getExpense(db, id));
     }, [db, id]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!expense) return <ScreenSkeleton variant="detail" />;
 
   const schedule =
@@ -55,11 +59,12 @@ export default function ExpenseDetailScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            await deleteExpense(db, id);
-            await syncReminders(db);
-            router.back();
-          },
+          onPress: () =>
+            runAction('Expense not deleted', async () => {
+              await deleteExpense(db, id);
+              await syncReminders(db);
+              router.back();
+            }),
         },
       ],
     );
@@ -69,25 +74,14 @@ export default function ExpenseDetailScreen() {
     <FadeInScreen>
       <View
         style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.header}>
-          <PressableScale
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={styles.headerButton}>
-            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-          </PressableScale>
-          <Text accessibilityRole="header" style={styles.title}>
-            Movement
-          </Text>
-          <PressableScale
-            accessibilityLabel="Edit movement"
-            accessibilityRole="button"
-            onPress={() => router.push(`/new-expense?id=${id}`)}
-            style={styles.headerButton}>
-            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-          </PressableScale>
-        </View>
+        <PageHeader
+          title="Movement"
+          action={{
+            icon: 'pencil',
+            label: 'Edit movement',
+            onPress: () => router.push(`/new-expense?id=${id}`),
+          }}
+        />
 
         <View style={styles.summary}>
           <CategoryTile
@@ -158,22 +152,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingHorizontal: 20,
     gap: 18,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
   },
   summary: {
     alignItems: 'center',

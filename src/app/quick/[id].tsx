@@ -1,14 +1,15 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CategoryTile } from '@/components/category-tile';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
-import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
+import { ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius, status } from '@/constants/theme';
 import {
   deleteExpense,
@@ -21,6 +22,8 @@ import {
 import { formatCop } from '@/lib/money';
 import { paymentLabel } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
+import { runAction } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 export default function QuickConfirmScreen() {
   const db = useSQLiteContext();
@@ -31,26 +34,33 @@ export default function QuickConfirmScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
 
-  useEffect(() => {
-    getExpense(db, id).then((row) => {
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      const [row, rows] = await Promise.all([getExpense(db, id), listCategories(db)]);
       if (row) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setExpense(row);
       setCategoryId(row?.categoryId ?? null);
-    });
-    listCategories(db).then(setCategories);
-  }, [db, id]);
+      setCategories(rows);
+    }, [db, id]),
+    { onFocus: false },
+  );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!expense) return <ScreenSkeleton variant="detail" />;
 
-  async function choose(category: number) {
-    setCategoryId(category);
-    await setExpenseCategory(db, id, category);
+  function choose(category: number) {
+    runAction('Category not saved', async () => {
+      setCategoryId(category);
+      await setExpenseCategory(db, id, category);
+    });
   }
 
-  async function discard() {
-    await deleteExpense(db, id);
-    await syncReminders(db);
-    router.replace('/');
+  function discard() {
+    runAction('Not deleted', async () => {
+      await deleteExpense(db, id);
+      await syncReminders(db);
+      router.replace('/');
+    });
   }
 
   return (

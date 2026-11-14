@@ -1,13 +1,14 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTabRail } from '@/components/floating-tabs';
+import { EmptyState, Strong, SummaryCard, TabTitle } from '@/components/tab-parts';
 import { CategoryTile } from '@/components/category-tile';
 import { Chip } from '@/components/chip';
+import { useTabRail } from '@/components/floating-tabs';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { ChargeStatus } from '@/components/status-label';
@@ -19,6 +20,7 @@ import { formatDay, toDay } from '@/lib/dates';
 import { incomeKind } from '@/lib/income';
 import { formatCop } from '@/lib/money';
 import { remindersAllowed } from '@/lib/reminders';
+import { useLoad } from '@/lib/use-load';
 
 export default function RecurringScreen() {
   const db = useSQLiteContext();
@@ -31,9 +33,9 @@ export default function RecurringScreen() {
   const [allowed, setAllowed] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      Promise.all([
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      await Promise.all([
         listRecurring(db, today),
         remindersAllowed(),
         listRecurringIncomes(db, today),
@@ -53,34 +55,21 @@ export default function RecurringScreen() {
     .filter((item) => daysBetween(today, item.nextChargeOn) <= 7)
     .reduce((sum, item) => sum + item.amountCop, 0);
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!loaded) return <ScreenSkeleton variant="list" />;
 
   const header = (
     <View style={styles.header}>
-      <View style={styles.titleRow}>
-        <View style={styles.titleButton} />
-        <Text accessibilityRole="header" style={styles.title}>
-          Recurring
-        </Text>
-        <PressableScale
-          accessibilityLabel="Add recurring"
-          accessibilityRole="button"
-          onPress={() => router.push('/recurring/form')}
-          style={styles.titleButton}>
-          <SymbolView name="plus" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
+      <TabTitle
+        title="Recurring"
+        add={{ label: 'Add recurring', onPress: () => router.push('/recurring/form') }}
+      />
 
       {items.length > 0 && (
         <>
-          <View style={styles.summary}>
-            <Text style={styles.summaryLabel}>Every month</Text>
-            <Text style={styles.total}>{formatCop(monthly)}</Text>
-            <Text style={styles.summaryLabel}>
-              {items.length} active ·{' '}
-              <Text style={styles.summaryStrong}>{formatCop(nextWeek)}</Text> in the next 7 days
-            </Text>
-          </View>
+          <SummaryCard label="Every month" amount={formatCop(monthly)}>
+            {items.length} active · <Strong>{formatCop(nextWeek)}</Strong> in the next 7 days
+          </SummaryCard>
 
           {!allowed && (
             <PressableScale
@@ -133,18 +122,11 @@ export default function RecurringScreen() {
           ) : undefined
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No recurring charges yet</Text>
-            <Text style={styles.emptyText}>
-              Add a subscription or service and get a reminder before each charge.
-            </Text>
-            <PressableScale
-              accessibilityRole="button"
-              onPress={() => router.push('/recurring/form')}
-              style={styles.emptyButton}>
-              <Text style={styles.emptyButtonLabel}>Add recurring</Text>
-            </PressableScale>
-          </View>
+          <EmptyState
+            title="No recurring charges yet"
+            text="Add a subscription or service and get a reminder before each charge."
+            action={{ label: 'Add recurring', onPress: () => router.push('/recurring/form') }}
+          />
         }
         renderItem={({ item, index }) => (
           <RecurringRow
@@ -288,42 +270,9 @@ const styles = StyleSheet.create({
     gap: 18,
     marginBottom: 18,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  titleButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  summary: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.panel,
-    padding: 18,
-    gap: 4,
-  },
   summaryLabel: {
     fontSize: 13,
     color: colors.muted,
-  },
-  summaryStrong: {
-    fontWeight: '600',
-    color: colors.ink,
-  },
-  total: {
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    color: colors.ink,
-    fontVariant: ['tabular-nums'],
   },
   off: {
     backgroundColor: colors.surface,
@@ -384,36 +333,5 @@ const styles = StyleSheet.create({
   rowDetail: {
     fontSize: 12,
     color: colors.muted,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 96,
-    paddingHorizontal: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  emptyText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.muted,
-    textAlign: 'center',
-  },
-  emptyButton: {
-    alignSelf: 'stretch',
-    height: 56,
-    marginTop: 10,
-    borderRadius: radius.card,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyButtonLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.surface,
   },
 });

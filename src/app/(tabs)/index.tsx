@@ -1,12 +1,13 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTabRail } from '@/components/floating-tabs';
 import { CategoryTile } from '@/components/category-tile';
+import { useTabRail } from '@/components/floating-tabs';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { ChargeStatus } from '@/components/status-label';
@@ -21,6 +22,8 @@ import { getSetting, setSetting } from '@/db/settings';
 import { formatDay, greeting, toDay, toMonth } from '@/lib/dates';
 import { installDaysLeft, readInstallExpiry, WARNING_DAYS } from '@/lib/install';
 import { formatCop } from '@/lib/money';
+import { reportFailure } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 export default function HomeScreen() {
   const db = useSQLiteContext();
@@ -40,9 +43,9 @@ export default function HomeScreen() {
   const [hasDebit, setHasDebit] = useState(false);
   const [setupHidden, setSetupHidden] = useState(true);
 
-  useFocusEffect(
-    useCallback(() => {
-      Promise.all([
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      await Promise.all([
         listAccounts(db),
         listCards(db, today),
         listRecurring(db, today),
@@ -82,6 +85,7 @@ export default function HomeScreen() {
     }, [db, today, month]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!loaded) return <ScreenSkeleton variant="home" />;
 
   const totalCop = accounts.reduce((sum, account) => sum + account.balanceCop, 0);
@@ -111,7 +115,7 @@ export default function HomeScreen() {
 
   function hideSetup() {
     setSetupHidden(true);
-    setSetting(db, 'setupHidden', '1');
+    setSetting(db, 'setupHidden', '1').catch(reportFailure('Setting not saved'));
   }
 
   return (

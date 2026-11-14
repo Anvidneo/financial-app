@@ -69,14 +69,23 @@ export function Intro() {
       overlay.set(
         withDelay(
           HOLD,
-          withTiming(0, { duration: EXIT, easing: EASE_OUT, reduceMotion: ReduceMotion.Never }, () => {
-            scheduleOnRN(finish);
-          }),
+          withTiming(
+            0,
+            { duration: EXIT, easing: EASE_OUT, reduceMotion: ReduceMotion.Never },
+            () => {
+              scheduleOnRN(finish);
+            },
+          ),
         ),
       );
     }
 
-    play();
+    play().catch((error: unknown) => {
+      console.warn('Intro failed', error);
+      revealAt = Date.now();
+      SplashScreen.hideAsync().catch(() => undefined);
+      finish();
+    });
   }, [firstCard, overlay, reduced, scale, secondCard]);
 
   const backdrop = useAnimatedStyle(() => ({ opacity: overlay.get() }));
@@ -89,7 +98,9 @@ export function Intro() {
   if (done) return null;
 
   return (
-    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, backdrop]}>
+    <Animated.View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, styles.backdrop, backdrop]}>
       <Animated.View style={[styles.wallet, wallet]}>
         <Animated.View style={[styles.card, styles.firstCard, first]} />
         <Animated.View style={[styles.card, styles.secondCard, second]} />

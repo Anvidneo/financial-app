@@ -1,10 +1,10 @@
-import { router, useFocusEffect, type Href } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader, PageScreen } from '@/components/page';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius, status } from '@/constants/theme';
 import { listCards } from '@/db/cards';
@@ -14,6 +14,7 @@ import { formatDay, toDay } from '@/lib/dates';
 import { readInstallExpiry } from '@/lib/install';
 import { formatCop } from '@/lib/money';
 import { remindersAllowed } from '@/lib/reminders';
+import { useLoad } from '@/lib/use-load';
 
 type Item = {
   key: string;
@@ -31,14 +32,13 @@ function dayLabel(days: number): string {
 
 export default function RemindersScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const today = toDay(new Date());
   const [items, setItems] = useState<Item[]>([]);
   const [allowed, setAllowed] = useState(true);
 
-  useFocusEffect(
-    useCallback(() => {
-      async function load() {
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      {
         const [recurring, cards, expiresOn] = await Promise.all([
           listRecurring(db, today),
           listCards(db, today),
@@ -80,31 +80,14 @@ export default function RemindersScreen() {
         setItems([...charges, ...payments, ...install].sort((a, b) => a.day.localeCompare(b.day)));
         setAllowed(await remindersAllowed());
       }
-
-      load();
     }, [db, today]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
+
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          Reminders
-        </Text>
-        <View style={styles.headerButton} />
-      </View>
+    <PageScreen gap={14}>
+      <PageHeader title="Reminders" />
 
       {!allowed && (
         <PressableScale
@@ -150,35 +133,11 @@ export default function RemindersScreen() {
           })}
         </View>
       )}
-    </ScrollView>
+    </PageScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 14,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
   off: {
     gap: 2,
     padding: 16,

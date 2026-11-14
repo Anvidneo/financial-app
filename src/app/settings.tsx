@@ -3,10 +3,11 @@ import { File, Paths } from 'expo-file-system';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useState } from 'react';
+import { Alert, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { PageHeader, PageScreen } from '@/components/page';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { createBackup, restoreBackup } from '@/db/backup';
@@ -19,6 +20,8 @@ import { incomeKind } from '@/lib/income';
 import { readInstallExpiry } from '@/lib/install';
 import { paymentLabel } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
+import { reportFailure } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 const LINK = 'financeapp://add?amount=[Amount]&merchant=[Merchant]&card=[Card]';
 const STEPS = [
@@ -37,25 +40,25 @@ async function shareFile(name: string, contents: string) {
 
 export default function SettingsScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState('');
   const [expiresOn, setExpiresOn] = useState<string | null>(null);
 
-  useEffect(() => {
-    getSetting(db, 'name').then((value) => setName(value ?? ''));
-    readInstallExpiry().then(setExpiresOn);
-  }, [db]);
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      const [savedName, expiry] = await Promise.all([getSetting(db, 'name'), readInstallExpiry()]);
+      setName(savedName ?? '');
+      setExpiresOn(expiry);
+    }, [db]),
+    { onFocus: false },
+  );
 
-  async function run(failure: string, task: () => Promise<void>) {
+  // Reports its own failure, so callers can start it from a tap without awaiting it.
+  function run(failure: string, task: () => Promise<void>): Promise<void> {
     setBusy(true);
-    try {
-      await task();
-    } catch (error) {
-      Alert.alert(failure, error instanceof Error ? error.message : 'Try again.');
-    } finally {
-      setBusy(false);
-    }
+    return task()
+      .finally(() => setBusy(false))
+      .catch(reportFailure(failure));
   }
 
   function exportCsv() {
@@ -124,26 +127,11 @@ export default function SettingsScreen() {
     );
   }
 
+  if (failed) return <LoadFailed onRetry={retry} />;
+
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          Settings
-        </Text>
-        <View style={styles.headerButton} />
-      </View>
+    <PageScreen gap={12}>
+      <PageHeader title="Settings" />
 
       <View style={styles.card}>
         <View style={[styles.action, styles.divider]}>
@@ -197,7 +185,7 @@ export default function SettingsScreen() {
           {LINK}
         </Text>
       </View>
-    </ScrollView>
+    </PageScreen>
   );
 }
 
@@ -226,30 +214,6 @@ function Action({
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
   section: {
     marginTop: 8,
     fontSize: 17,

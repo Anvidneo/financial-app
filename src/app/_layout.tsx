@@ -13,6 +13,7 @@ import { postDueCharges } from '@/db/recurring';
 import { migrate } from '@/db/schema';
 import { toDay } from '@/lib/dates';
 import { syncReminders } from '@/lib/reminders';
+import { reportFailure } from '@/lib/report';
 
 function ChargeSync({ children }: { children: ReactNode }) {
   const db = useSQLiteContext();
@@ -32,9 +33,11 @@ function ChargeSync({ children }: { children: ReactNode }) {
       }
     }
 
-    sync().finally(() => setReady(true));
+    sync()
+      .finally(() => setReady(true))
+      .catch(reportFailure('Recurring charges not updated'));
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') sync();
+      if (state === 'active') sync().catch(reportFailure('Recurring charges not updated'));
     });
     return () => subscription.remove();
   }, [db]);

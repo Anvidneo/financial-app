@@ -1,23 +1,22 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { FieldInput, FormGroup, FormHeader, FormScreen, SaveButton } from '@/components/form';
 import { Chip } from '@/components/chip';
-import { PressableScale } from '@/components/pressable-scale';
-import { colors, radius } from '@/constants/theme';
+import { LoadFailed } from '@/components/load-failed';
+import { colors } from '@/constants/theme';
 import { listAccounts, type Account } from '@/db/accounts';
 import { getCard, payStatement, type CardWithSummary } from '@/db/cards';
 import { toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 import { syncReminders } from '@/lib/reminders';
+import { useLoad } from '@/lib/use-load';
 
 export default function CardPaymentScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
   const today = toDay(new Date());
@@ -27,14 +26,17 @@ export default function CardPaymentScreen() {
   const [amountCop, setAmountCop] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    getCard(db, id, today).then((row) => {
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      const [row, rows] = await Promise.all([getCard(db, id, today), listAccounts(db)]);
       setCard(row);
       setAmountCop(row?.statement.balanceCop ?? 0);
-    });
-    listAccounts(db).then(setAccounts);
-  }, [db, id, today]);
+      setAccounts(rows);
+    }, [db, id, today]),
+    { onFocus: false },
+  );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!card) return <View style={styles.screen} />;
 
   const { statement } = card;
@@ -62,38 +64,21 @@ export default function CardPaymentScreen() {
   }
 
   return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.close}>
-          <SymbolView name="xmark" size={16} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          Card payment
-        </Text>
-        <View style={styles.close} />
-      </View>
+    <FormScreen>
+      <FormHeader>Card payment</FormHeader>
 
-      <View style={styles.form}>
+      <FormGroup>
         <View style={styles.field}>
           <Text style={styles.label}>Amount</Text>
-          <TextInput
+          <FieldInput
             accessibilityLabel="Amount"
             keyboardType="number-pad"
             onChangeText={(text) => setAmountCop(Number(text.replace(/\D/g, '').slice(0, 12)))}
             placeholder="$0"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
             value={amountCop > 0 ? formatCop(amountCop) : ''}
           />
         </View>
-      </View>
+      </FormGroup>
 
       <View style={styles.quickAmounts}>
         <Chip
@@ -142,15 +127,8 @@ export default function CardPaymentScreen() {
         </>
       )}
 
-      <PressableScale
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canSave }}
-        disabled={!canSave}
-        onPress={save}
-        style={[styles.save, !canSave && styles.saveDisabled]}>
-        <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>Save payment</Text>
-      </PressableScale>
-    </ScrollView>
+      <SaveButton disabled={!canSave} label="Save payment" onPress={save} />
+    </FormScreen>
   );
 }
 
@@ -158,32 +136,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  content: {
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  close: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  form: {
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
   },
   field: {
     flexDirection: 'row',
@@ -195,14 +147,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     color: colors.muted,
-  },
-  input: {
-    flex: 1,
-    minHeight: 48,
-    textAlign: 'right',
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.ink,
   },
   quickAmounts: {
     flexDirection: 'row',
@@ -224,24 +168,5 @@ const styles = StyleSheet.create({
   warning: {
     fontSize: 13,
     color: colors.danger,
-  },
-  save: {
-    height: 56,
-    marginTop: 8,
-    borderRadius: radius.card,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveDisabled: {
-    backgroundColor: colors.control,
-  },
-  saveLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.surface,
-  },
-  saveLabelDisabled: {
-    color: colors.muted,
   },
 });

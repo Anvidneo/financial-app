@@ -1,11 +1,11 @@
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader, PageScreen } from '@/components/page';
 import { CategoryTile } from '@/components/category-tile';
+import { LoadFailed } from '@/components/load-failed';
 import { MonthBars } from '@/components/month-bars';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
@@ -20,10 +20,10 @@ import {
 import { formatDay, formatMonth, lastMonths, toDay, toMonth } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 import { paymentLabel } from '@/lib/payment';
+import { useLoad } from '@/lib/use-load';
 
 export default function CategoryDetailScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; month?: string }>();
   const id = Number(params.id);
   const month = params.month ?? toMonth(toDay(new Date()));
@@ -32,43 +32,33 @@ export default function CategoryDetailScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [totals, setTotals] = useState<number[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      getCategory(db, id).then(setCategory);
-      listExpenses(db, month, id).then(setExpenses);
-      listMonthTotals(db, months, id).then(setTotals);
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      const [row, rows, monthTotals] = await Promise.all([
+        getCategory(db, id),
+        listExpenses(db, month, id),
+        listMonthTotals(db, months, id),
+      ]);
+      setCategory(row);
+      setExpenses(rows);
+      setTotals(monthTotals);
     }, [db, id, month, months]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!category) return <ScreenSkeleton variant="detail" />;
 
   return (
     <FadeInScreen>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-        ]}
-        style={styles.screen}>
-        <View style={styles.header}>
-          <PressableScale
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={styles.headerButton}>
-            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-          </PressableScale>
-          <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
-            {category.name}
-          </Text>
-          <PressableScale
-            accessibilityLabel="Edit category"
-            accessibilityRole="button"
-            onPress={() => router.push(`/category/form?id=${id}`)}
-            style={styles.headerButton}>
-            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-          </PressableScale>
-        </View>
+      <PageScreen gap={14}>
+        <PageHeader
+          title={category.name}
+          action={{
+            icon: 'pencil',
+            label: 'Edit category',
+            onPress: () => router.push(`/category/form?id=${id}`),
+          }}
+        />
 
         <View style={styles.summary}>
           <Text style={styles.month}>{formatMonth(month)}</Text>
@@ -105,38 +95,12 @@ export default function CategoryDetailScreen() {
             })}
           </View>
         )}
-      </ScrollView>
+      </PageScreen>
     </FadeInScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 14,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-    textAlign: 'center',
-  },
   summary: {
     gap: 4,
     padding: 18,

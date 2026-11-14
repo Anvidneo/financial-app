@@ -1,15 +1,16 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTabRail } from '@/components/floating-tabs';
 import { CategoryTile } from '@/components/category-tile';
-import { ChartLegend, DailyBars } from '@/components/daily-bars';
-import { MonthBars } from '@/components/month-bars';
 import { Chip } from '@/components/chip';
+import { ChartLegend, DailyBars } from '@/components/daily-bars';
+import { useTabRail } from '@/components/floating-tabs';
+import { LoadFailed } from '@/components/load-failed';
+import { MonthBars } from '@/components/month-bars';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius, status } from '@/constants/theme';
@@ -35,6 +36,7 @@ import {
 import { incomeKind } from '@/lib/income';
 import { formatCop } from '@/lib/money';
 import { paymentLabel } from '@/lib/payment';
+import { useLoad } from '@/lib/use-load';
 
 export default function ExpensesScreen() {
   const db = useSQLiteContext();
@@ -54,9 +56,9 @@ export default function ExpensesScreen() {
   const [view, setView] = useState<'days' | 'months'>('days');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      Promise.all([
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      await Promise.all([
         listCategories(db),
         listExpenses(db, month, categoryId),
         listMonthTotals(db, chartMonths, categoryId),
@@ -94,6 +96,7 @@ export default function ExpensesScreen() {
     setMonth(addMonths(month, amount));
   }
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!loaded) return <ScreenSkeleton variant="list" />;
 
   const header = (

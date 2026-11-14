@@ -1,11 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
+import {
+  DangerButton,
+  FieldInput,
+  FormGroup,
+  FormHeader,
+  FormScreen,
+  SaveButton,
+} from '@/components/form';
 import { CategoryTile } from '@/components/category-tile';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import {
@@ -15,6 +23,8 @@ import {
   getCategory,
   updateCategory,
 } from '@/db/expenses';
+import { runAction } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 const PALETTE = [
   { color: '#1C7A43', tint: '#E3F6E9' },
@@ -41,7 +51,6 @@ const ICONS: SFSymbol[] = [
 
 export default function CategoryFormScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id ? Number(params.id) : null;
   const [name, setName] = useState('');
@@ -50,18 +59,20 @@ export default function CategoryFormScreen() {
   const [uses, setUses] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (id === null) return;
-
-    getCategory(db, id).then((category) => {
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      if (id === null) return;
+      const [category, count] = await Promise.all([getCategory(db, id), countCategoryUses(db, id)]);
+      setUses(count);
       if (!category) return;
       setName(category.name);
       setIcon(category.icon);
       setPalette({ color: category.color, tint: category.tint });
-    });
-    countCategoryUses(db, id).then(setUses);
-  }, [db, id]);
+    }, [db, id]),
+    { onFocus: false },
+  );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   const canSave = name.trim().length > 0 && !saving;
 
   async function save() {
@@ -88,51 +99,35 @@ export default function CategoryFormScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          await deleteCategory(db, id);
-          router.dismissTo('/categories');
-        },
+        onPress: () =>
+          runAction('Category not deleted', async () => {
+            await deleteCategory(db, id);
+            router.dismissTo('/categories');
+          }),
       },
     ]);
   }
 
   return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.close}>
-          <SymbolView name="xmark" size={16} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          {id === null ? 'New category' : 'Edit category'}
-        </Text>
-        <View style={styles.close} />
-      </View>
+    <FormScreen>
+      <FormHeader>{id === null ? 'New category' : 'Edit category'}</FormHeader>
 
       <View style={styles.preview}>
         <CategoryTile icon={icon} color={palette.color} tint={palette.tint} />
       </View>
 
-      <View style={styles.form}>
+      <FormGroup>
         <View style={styles.field}>
           <Text style={styles.label}>Name</Text>
-          <TextInput
+          <FieldInput
             accessibilityLabel="Name"
             autoCapitalize="words"
             onChangeText={setName}
             placeholder="Pets, education"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
             value={name}
           />
         </View>
-      </View>
+      </FormGroup>
 
       <Text style={styles.section}>Color</Text>
       <View style={styles.options}>
@@ -164,57 +159,18 @@ export default function CategoryFormScreen() {
         ))}
       </View>
 
-      <PressableScale
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canSave }}
-        disabled={!canSave}
-        onPress={save}
-        style={[styles.save, !canSave && styles.saveDisabled]}>
-        <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>Save category</Text>
-      </PressableScale>
+      <SaveButton disabled={!canSave} label="Save category" onPress={save} />
 
       {id !== null && uses === 0 && (
-        <PressableScale accessibilityRole="button" onPress={confirmDelete} style={styles.delete}>
-          <Text style={styles.deleteLabel}>Delete category</Text>
-        </PressableScale>
+        <DangerButton label="Delete category" onPress={confirmDelete} />
       )}
-    </ScrollView>
+    </FormScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  close: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
   preview: {
     alignItems: 'center',
-  },
-  form: {
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
   },
   field: {
     flexDirection: 'row',
@@ -226,14 +182,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     color: colors.muted,
-  },
-  input: {
-    flex: 1,
-    minHeight: 48,
-    textAlign: 'right',
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.ink,
   },
   section: {
     fontSize: 15,
@@ -262,34 +210,5 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-  },
-  save: {
-    height: 56,
-    marginTop: 8,
-    borderRadius: radius.card,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveDisabled: {
-    backgroundColor: colors.control,
-  },
-  saveLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.surface,
-  },
-  saveLabelDisabled: {
-    color: colors.muted,
-  },
-  delete: {
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.danger,
   },
 });

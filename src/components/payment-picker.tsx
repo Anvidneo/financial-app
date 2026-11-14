@@ -9,6 +9,7 @@ import { colors } from '@/constants/theme';
 import { listAccounts, type Account } from '@/db/accounts';
 import { listCardOptions, listDebitCards, type Card, type DebitCard } from '@/db/cards';
 import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/payment';
+import { reportFailure } from '@/lib/report';
 
 export type Payment = {
   paymentMethod: PaymentMethod | null;
@@ -51,12 +52,14 @@ export function PaymentPicker({
   const [accounts, setAccounts] = useState<Account[]>([]);
 
   useEffect(() => {
-    listCardOptions(db).then((rows) => {
-      setCards(rows);
-      onCardsLoaded?.(rows);
-    });
-    listDebitCards(db).then(setDebitCards);
-    listAccounts(db).then(setAccounts);
+    Promise.all([listCardOptions(db), listDebitCards(db), listAccounts(db)])
+      .then(([cardRows, debitRows, accountRows]) => {
+        setCards(cardRows);
+        setDebitCards(debitRows);
+        setAccounts(accountRows);
+        onCardsLoaded?.(cardRows);
+      })
+      .catch(reportFailure('Cards not loaded'));
     // onCardsLoaded only reports the first load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db]);

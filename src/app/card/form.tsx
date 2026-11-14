@@ -1,13 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import {
+  DangerButton,
+  FieldInput,
+  FormField,
+  FormGroup,
+  FormHeader,
+  FormScreen,
+  SaveButton,
+} from '@/components/form';
 import { Chip } from '@/components/chip';
-import { PressableScale } from '@/components/pressable-scale';
-import { colors, radius } from '@/constants/theme';
+import { LoadFailed } from '@/components/load-failed';
+import { colors } from '@/constants/theme';
 import { listAccounts, type Account } from '@/db/accounts';
 import {
   addCard,
@@ -23,6 +30,8 @@ import { parseRate } from '@/lib/cards';
 import { toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 import { syncReminders } from '@/lib/reminders';
+import { runAction } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 function toDayOfMonth(text: string): number {
   return Number(text.replace(/\D/g, '').slice(0, 2));
@@ -34,7 +43,6 @@ function isDayOfMonth(day: number): boolean {
 
 export default function CardFormScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string; debitId?: string }>();
   const id = params.id ? Number(params.id) : null;
   const debitId = params.debitId ? Number(params.debitId) : null;
@@ -51,20 +59,20 @@ export default function CardFormScreen() {
   const [purchaseCount, setPurchaseCount] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    listAccounts(db).then(setAccounts);
-    if (debitId !== null) {
-      getDebitCard(db, debitId).then((card) => {
-        if (!card) return;
-        setName(card.name);
-        setLastFour(card.lastFour);
-        setAccountId(card.accountId);
-        setPurchaseCount(card.purchaseCount);
-      });
-    }
-    if (id === null) return;
-
-    getCard(db, id, toDay(new Date())).then((card) => {
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      setAccounts(await listAccounts(db));
+      if (debitId !== null) {
+        const debit = await getDebitCard(db, debitId);
+        if (!debit) return;
+        setName(debit.name);
+        setLastFour(debit.lastFour);
+        setAccountId(debit.accountId);
+        setPurchaseCount(debit.purchaseCount);
+        return;
+      }
+      if (id === null) return;
+      const card = await getCard(db, id, toDay(new Date()));
       if (!card) return;
       setName(card.name);
       setLastFour(card.lastFour);
@@ -73,9 +81,11 @@ export default function CardFormScreen() {
       setPaymentDay(card.paymentDay);
       if (card.monthlyRate > 0) setRateText(card.monthlyRate.toString());
       setPurchaseCount(card.purchaseCount);
-    });
-  }, [db, id, debitId]);
+    }, [db, id, debitId]),
+    { onFocus: false },
+  );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   // Paid statements are stored by cut-off date, so that day can't move once the card has history.
   const cutOffLocked = purchaseCount > 0;
   const canSave =
@@ -120,34 +130,20 @@ export default function CardFormScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          if (id !== null) await deleteCard(db, id);
-          if (debitId !== null) await deleteDebitCard(db, debitId);
-          await syncReminders(db);
-          router.dismissTo('/cards');
-        },
+        onPress: () =>
+          runAction('Card not deleted', async () => {
+            if (id !== null) await deleteCard(db, id);
+            if (debitId !== null) await deleteDebitCard(db, debitId);
+            await syncReminders(db);
+            router.dismissTo('/cards');
+          }),
       },
     ]);
   }
 
   return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.close}>
-          <SymbolView name="xmark" size={16} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          {isNew ? 'New card' : 'Edit card'}
-        </Text>
-        <View style={styles.close} />
-      </View>
+    <FormScreen>
+      <FormHeader>{isNew ? 'New card' : 'Edit card'}</FormHeader>
 
       {isNew && (
         <View style={styles.types}>
@@ -156,40 +152,34 @@ export default function CardFormScreen() {
         </View>
       )}
 
-      <View style={styles.form}>
+      <FormGroup>
         <Field label="Card name">
-          <TextInput
+          <FieldInput
             accessibilityLabel="Card name"
             autoCapitalize="words"
             onChangeText={setName}
             placeholder="Visa"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
             value={name}
           />
         </Field>
         <Field label="Last 4 digits" last={debit}>
-          <TextInput
+          <FieldInput
             accessibilityLabel="Last 4 digits"
             keyboardType="number-pad"
             maxLength={4}
             onChangeText={(text) => setLastFour(text.replace(/\D/g, ''))}
             placeholder="0000"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
             value={lastFour}
           />
         </Field>
         {!debit && (
           <>
             <Field label="Credit limit">
-              <TextInput
+              <FieldInput
                 accessibilityLabel="Credit limit"
                 keyboardType="number-pad"
                 onChangeText={(text) => setLimitCop(Number(text.replace(/\D/g, '').slice(0, 12)))}
                 placeholder="$0"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
                 value={limitCop > 0 ? formatCop(limitCop) : ''}
               />
             </Field>
@@ -206,30 +196,26 @@ export default function CardFormScreen() {
               />
             </Field>
             <Field label="Payment day">
-              <TextInput
+              <FieldInput
                 accessibilityLabel="Payment day"
                 keyboardType="number-pad"
                 onChangeText={(text) => setPaymentDay(toDayOfMonth(text))}
                 placeholder="1 to 31"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
                 value={paymentDay > 0 ? paymentDay.toString() : ''}
               />
             </Field>
             <Field label="Monthly interest %" last>
-              <TextInput
+              <FieldInput
                 accessibilityLabel="Monthly interest percent"
                 keyboardType="decimal-pad"
                 onChangeText={setRateText}
                 placeholder="0"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
                 value={rateText}
               />
             </Field>
           </>
         )}
-      </View>
+      </FormGroup>
 
       {debit && accounts.length > 0 && (
         <>
@@ -256,21 +242,12 @@ export default function CardFormScreen() {
         </Text>
       )}
 
-      <PressableScale
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canSave }}
-        disabled={!canSave}
-        onPress={save}
-        style={[styles.save, !canSave && styles.saveDisabled]}>
-        <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>Save card</Text>
-      </PressableScale>
+      <SaveButton disabled={!canSave} label="Save card" onPress={save} />
 
       {!isNew && purchaseCount === 0 && (
-        <PressableScale accessibilityRole="button" onPress={confirmDelete} style={styles.delete}>
-          <Text style={styles.deleteLabel}>Delete card</Text>
-        </PressableScale>
+        <DangerButton label="Delete card" onPress={confirmDelete} />
       )}
-    </ScrollView>
+    </FormScreen>
   );
 }
 
@@ -284,39 +261,13 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <View style={[styles.field, !last && styles.fieldDivider]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+    <FormField label={label} divider={!last}>
       {children}
-    </View>
+    </FormField>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  close: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
   types: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -326,26 +277,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.ink,
-  },
-  form: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    paddingHorizontal: 16,
-  },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    minHeight: 48,
-  },
-  fieldDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    color: colors.muted,
   },
   input: {
     flex: 1,
@@ -362,34 +293,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.muted,
-  },
-  save: {
-    height: 56,
-    marginTop: 8,
-    borderRadius: radius.card,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveDisabled: {
-    backgroundColor: colors.control,
-  },
-  saveLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.surface,
-  },
-  saveLabelDisabled: {
-    color: colors.muted,
-  },
-  delete: {
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.danger,
   },
 });

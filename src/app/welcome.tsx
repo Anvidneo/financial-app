@@ -7,16 +7,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { setSetting } from '@/db/settings';
+import { runAction } from '@/lib/report';
 
 export default function WelcomeScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
 
-  async function start() {
-    await setSetting(db, 'name', name.trim());
-    await setSetting(db, 'welcomed', '1');
-    router.replace('/');
+  function start() {
+    runAction('Not saved', async () => {
+      await setSetting(db, 'name', name.trim());
+      await setSetting(db, 'welcomed', '1');
+      router.replace('/');
+    });
   }
 
   return (

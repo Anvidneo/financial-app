@@ -1,11 +1,11 @@
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader, PageScreen } from '@/components/page';
 import { CategoryTile } from '@/components/category-tile';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { ChargeStatus } from '@/components/status-label';
@@ -23,23 +23,26 @@ import { formatDay, toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 import { paymentLabel } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
+import { runAction } from '@/lib/report';
+import { useLoad } from '@/lib/use-load';
 
 export default function RecurringDetailScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
   const today = toDay(new Date());
   const [item, setItem] = useState<Recurring | null>(null);
   const [charges, setCharges] = useState<RecurringCharge[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      getRecurring(db, id, today).then(setItem);
-      listCharges(db, id).then(setCharges);
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      const [row, rows] = await Promise.all([getRecurring(db, id, today), listCharges(db, id)]);
+      setItem(row);
+      setCharges(rows);
     }, [db, id, today]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (!item) return <ScreenSkeleton variant="detail" />;
 
   async function toggleReminders(value: boolean) {
@@ -57,11 +60,12 @@ export default function RecurringDetailScreen() {
         {
           text: 'Mark as cancelled',
           style: 'destructive',
-          onPress: async () => {
-            await cancelRecurring(db, id);
-            await syncReminders(db);
-            router.back();
-          },
+          onPress: () =>
+            runAction('Recurring not deleted', async () => {
+              await cancelRecurring(db, id);
+              await syncReminders(db);
+              router.back();
+            }),
         },
       ],
     );
@@ -69,31 +73,15 @@ export default function RecurringDetailScreen() {
 
   return (
     <FadeInScreen>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-        ]}
-        style={styles.screen}>
-        <View style={styles.header}>
-          <PressableScale
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={styles.headerButton}>
-            <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-          </PressableScale>
-          <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
-            {item.name}
-          </Text>
-          <PressableScale
-            accessibilityLabel="Edit recurring"
-            accessibilityRole="button"
-            onPress={() => router.push(`/recurring/form?id=${id}`)}
-            style={styles.headerButton}>
-            <SymbolView name="pencil" size={18} tintColor={colors.ink} />
-          </PressableScale>
-        </View>
+      <PageScreen gap={14}>
+        <PageHeader
+          title={item.name}
+          action={{
+            icon: 'pencil',
+            label: 'Edit recurring',
+            onPress: () => router.push(`/recurring/form?id=${id}`),
+          }}
+        />
 
         <View style={styles.next}>
           <Text style={styles.label}>Next charge {formatDay(item.nextChargeOn)}</Text>
@@ -141,7 +129,7 @@ export default function RecurringDetailScreen() {
         <PressableScale accessibilityRole="button" onPress={confirmCancel} style={styles.cancel}>
           <Text style={styles.cancelLabel}>Mark as cancelled</Text>
         </PressableScale>
-      </ScrollView>
+      </PageScreen>
     </FadeInScreen>
   );
 }
@@ -156,32 +144,6 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 14,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-    textAlign: 'center',
-  },
   next: {
     alignItems: 'center',
     gap: 6,

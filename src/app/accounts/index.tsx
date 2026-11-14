@@ -1,25 +1,25 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PageHeader, PageScreen } from '@/components/page';
+import { LoadFailed } from '@/components/load-failed';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { listAccountFlows, listAccounts, type Account, type AccountFlow } from '@/db/accounts';
 import { toDay, toMonth } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
+import { useLoad } from '@/lib/use-load';
 
 export default function AccountsScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [flows, setFlows] = useState<AccountFlow[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      Promise.all([listAccounts(db), listAccountFlows(db, toMonth(toDay(new Date())))]).then(
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      await Promise.all([listAccounts(db), listAccountFlows(db, toMonth(toDay(new Date())))]).then(
         ([accountRows, flowRows]) => {
           setAccounts(accountRows);
           setFlows(flowRows);
@@ -28,34 +28,19 @@ export default function AccountsScreen() {
     }, [db]),
   );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   const totalCop = accounts.reduce((sum, account) => sum + account.balanceCop, 0);
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-      ]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.headerButton}>
-          <SymbolView name="chevron.left" size={18} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          Accounts
-        </Text>
-        <PressableScale
-          accessibilityLabel="Add account"
-          accessibilityRole="button"
-          onPress={() => router.push('/accounts/form')}
-          style={styles.headerButton}>
-          <SymbolView name="plus" size={18} tintColor={colors.ink} />
-        </PressableScale>
-      </View>
+    <PageScreen gap={18}>
+      <PageHeader
+        title="Accounts"
+        action={{
+          icon: 'plus',
+          label: 'Add account',
+          onPress: () => router.push('/accounts/form'),
+        }}
+      />
 
       <View style={styles.total}>
         <Text style={styles.label}>Total balance</Text>
@@ -86,7 +71,7 @@ export default function AccountsScreen() {
         Income linked to an account raises its balance, and expenses and card payments lower it.
         Edit an account any time to match your bank.
       </Text>
-    </ScrollView>
+    </PageScreen>
   );
 }
 
@@ -114,30 +99,6 @@ const styles = StyleSheet.create({
   },
   flowIn: {
     color: colors.income,
-  },
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 18,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
   },
   total: {
     alignItems: 'center',

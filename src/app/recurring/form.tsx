@@ -1,12 +1,19 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import {
+  FieldInput,
+  FormField,
+  FormGroup,
+  FormHeader,
+  FormScreen,
+  SaveButton,
+} from '@/components/form';
 import { Chip } from '@/components/chip';
+import { LoadFailed } from '@/components/load-failed';
 import { PaymentPicker, type Payment } from '@/components/payment-picker';
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
@@ -15,13 +22,13 @@ import { addRecurring, getRecurring, updateRecurring } from '@/db/recurring';
 import { toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 import { requestReminders, syncReminders } from '@/lib/reminders';
+import { useLoad } from '@/lib/use-load';
 
 const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
 const REMIND_OPTIONS = [1, 3, 5, 7];
 
 export default function RecurringFormScreen() {
   const db = useSQLiteContext();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id ? Number(params.id) : null;
   const today = toDay(new Date());
@@ -39,16 +46,15 @@ export default function RecurringFormScreen() {
   });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    listCategories(db).then((rows) => {
+  const { failed, retry } = useLoad(
+    useCallback(async () => {
+      const rows = await listCategories(db);
       setCategories(rows);
       if (id === null) {
         setCategoryId(rows.find((row) => row.name === 'Subscriptions')?.id ?? rows[0]?.id ?? null);
+        return;
       }
-    });
-    if (id === null) return;
-
-    getRecurring(db, id, today).then((item) => {
+      const item = await getRecurring(db, id, today);
       if (!item) return;
       setName(item.name);
       setAmountCop(item.amountCop);
@@ -61,9 +67,11 @@ export default function RecurringFormScreen() {
         debitCardId: item.debitCardId,
         accountId: item.accountId,
       });
-    });
-  }, [db, id, today]);
+    }, [db, id, today]),
+    { onFocus: false },
+  );
 
+  if (failed) return <LoadFailed onRetry={retry} />;
   const canSave =
     name.trim().length > 0 &&
     amountCop > 0 &&
@@ -92,51 +100,30 @@ export default function RecurringFormScreen() {
   }
 
   return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}
-      style={styles.screen}>
-      <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.close}>
-          <SymbolView name="xmark" size={16} tintColor={colors.ink} />
-        </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          {id === null ? 'New recurring' : 'Edit recurring'}
-        </Text>
-        <View style={styles.close} />
-      </View>
+    <FormScreen>
+      <FormHeader>{id === null ? 'New recurring' : 'Edit recurring'}</FormHeader>
 
-      <View style={styles.form}>
-        <View style={[styles.field, styles.fieldDivider]}>
-          <Text style={styles.fieldLabel}>Name</Text>
-          <TextInput
+      <FormGroup>
+        <FormField label="Name" divider>
+          <FieldInput
             accessibilityLabel="Name"
             autoCapitalize="words"
             onChangeText={setName}
             placeholder="Netflix, electricity"
-            placeholderTextColor={colors.muted}
             returnKeyType="done"
-            style={styles.input}
             value={name}
           />
-        </View>
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Amount</Text>
-          <TextInput
+        </FormField>
+        <FormField label="Amount">
+          <FieldInput
             accessibilityLabel="Amount"
             keyboardType="number-pad"
             onChangeText={(text) => setAmountCop(Number(text.replace(/\D/g, '').slice(0, 12)))}
             placeholder="$0"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
             value={amountCop > 0 ? formatCop(amountCop) : ''}
           />
-        </View>
-      </View>
+        </FormField>
+      </FormGroup>
 
       <Text style={styles.section}>Category</Text>
       <ScrollView
@@ -187,72 +174,12 @@ export default function RecurringFormScreen() {
         ))}
       </View>
 
-      <PressableScale
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canSave }}
-        disabled={!canSave}
-        onPress={save}
-        style={[styles.save, !canSave && styles.saveDisabled]}>
-        <Text style={[styles.saveLabel, !canSave && styles.saveLabelDisabled]}>Save recurring</Text>
-      </PressableScale>
-    </ScrollView>
+      <SaveButton disabled={!canSave} label="Save recurring" onPress={save} />
+    </FormScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  close: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  form: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    paddingHorizontal: 16,
-  },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    minHeight: 48,
-  },
-  fieldDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    color: colors.muted,
-  },
-  input: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.ink,
-    minHeight: 48,
-  },
   section: {
     marginTop: 6,
     fontSize: 17,
@@ -301,24 +228,5 @@ const styles = StyleSheet.create({
   remind: {
     flexDirection: 'row',
     gap: 8,
-  },
-  save: {
-    height: 56,
-    marginTop: 10,
-    borderRadius: radius.card,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveDisabled: {
-    backgroundColor: colors.control,
-  },
-  saveLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.surface,
-  },
-  saveLabelDisabled: {
-    color: colors.muted,
   },
 });
