@@ -1,14 +1,11 @@
-import * as Haptics from "expo-haptics";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, {
-  cubicBezier,
-  useReducedMotion,
-} from "react-native-reanimated";
+import * as Haptics from 'expo-haptics';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { cubicBezier, useReducedMotion } from 'react-native-reanimated';
 
-import { colors } from "@/constants/theme";
-import type { DayTotal } from "@/db/expenses";
-import { formatDay } from "@/lib/dates";
-import { formatCop } from "@/lib/money";
+import { colors } from '@/constants/theme';
+import type { DayTotal } from '@/db/expenses';
+import { formatDay } from '@/lib/dates';
+import { formatCop } from '@/lib/money';
 
 const CHART_HEIGHT = 140;
 const GRID_LINES = 4;
@@ -25,7 +22,7 @@ export function DailyBars({ days, selected, onSelect }: Props) {
   const reduced = useReducedMotion();
   const highest = Math.max(...days.map((day) => day.cardCop + day.otherCop), 1);
   const transition = {
-    transitionProperty: "height",
+    transitionProperty: 'height',
     transitionDuration: reduced ? 0 : 220,
     transitionTimingFunction: EASE_OUT,
   } as const;
@@ -40,10 +37,7 @@ export function DailyBars({ days, selected, onSelect }: Props) {
         {Array.from({ length: GRID_LINES }, (_, index) => (
           <View
             key={index}
-            style={[
-              styles.gridLine,
-              { bottom: ((index + 1) / GRID_LINES) * CHART_HEIGHT },
-            ]}
+            style={[styles.gridLine, { bottom: ((index + 1) / GRID_LINES) * CHART_HEIGHT }]}
           />
         ))}
         <View style={styles.baseline} />
@@ -65,8 +59,7 @@ export function DailyBars({ days, selected, onSelect }: Props) {
                   Haptics.selectionAsync();
                   onSelect(selected === day.day ? null : day.day);
                 }}
-                style={[styles.column, dimmed && styles.dimmed]}
-              >
+                style={[styles.column, dimmed && styles.dimmed]}>
                 <Animated.View
                   style={[
                     styles.segment,
@@ -77,12 +70,7 @@ export function DailyBars({ days, selected, onSelect }: Props) {
                   ]}
                 />
                 <Animated.View
-                  style={[
-                    styles.segment,
-                    styles.card,
-                    { height: height(day.cardCop) },
-                    transition,
-                  ]}
+                  style={[styles.segment, styles.card, { height: height(day.cardCop) }, transition]}
                 />
               </Pressable>
             );
@@ -129,15 +117,15 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   gridLine: {
-    position: "absolute",
+    position: 'absolute',
     left: 0,
     right: 0,
     borderTopWidth: 1,
-    borderStyle: "dashed",
+    borderStyle: 'dashed',
     borderColor: colors.line,
   },
   baseline: {
-    position: "absolute",
+    position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
@@ -150,21 +138,21 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    flexDirection: "row",
-    alignItems: "flex-end",
+    flexDirection: 'row',
+    alignItems: 'flex-end',
   },
   column: {
     flex: 1,
-    height: "100%",
-    justifyContent: "flex-end",
-    alignItems: "center",
+    height: '100%',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 1.5,
   },
   dimmed: {
     opacity: 0.3,
   },
   segment: {
-    alignSelf: "stretch",
+    alignSelf: 'stretch',
     borderRadius: 3,
   },
   stacked: {
@@ -177,13 +165,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paidNow,
   },
   labels: {
-    flexDirection: "row",
+    flexDirection: 'row',
     marginTop: 8,
   },
   labelSlot: {
     flex: 1,
-    overflow: "visible",
-    alignItems: "flex-start",
+    overflow: 'visible',
+    alignItems: 'flex-start',
   },
   label: {
     width: 44,
@@ -191,12 +179,12 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   legend: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 14,
   },
   legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
   legendDot: {
