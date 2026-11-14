@@ -12,6 +12,8 @@ type Backup = {
 const TABLES = [
   'categories',
   'accounts',
+  'recurring_incomes',
+  'incomes',
   'debit_cards',
   'cards',
   'recurring',

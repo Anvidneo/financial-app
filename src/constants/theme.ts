@@ -11,6 +11,7 @@ export const colors = {
   danger: '#A82C2C',
   credit: '#2F6FED',
   paidNow: '#2FB36B',
+  income: '#17863F',
 };
 
 export const radius = {

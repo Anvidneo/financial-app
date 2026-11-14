@@ -8,6 +8,7 @@ import Animated, { LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/chip';
+import { EntrySwitch } from '@/components/entry-switch';
 import { InstallmentPicker } from '@/components/installment-picker';
 import { Keypad } from '@/components/keypad';
 import { PaymentPicker, type Payment } from '@/components/payment-picker';
@@ -137,9 +138,13 @@ export default function NewExpenseScreen() {
           style={styles.close}>
           <SymbolView name="xmark" size={16} tintColor={colors.ink} />
         </PressableScale>
-        <Text accessibilityRole="header" style={styles.title}>
-          {id === null ? 'New expense' : 'Edit expense'}
-        </Text>
+        {id === null && !params.merchant ? (
+          <EntrySwitch value="expense" />
+        ) : (
+          <Text accessibilityRole="header" style={styles.title}>
+            {id === null ? 'New expense' : 'Edit expense'}
+          </Text>
+        )}
         <View style={styles.close} />
       </View>
 

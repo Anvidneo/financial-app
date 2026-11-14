@@ -11,10 +11,12 @@ import { Chip } from '@/components/chip';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { ChargeStatus } from '@/components/status-label';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, status } from '@/constants/theme';
+import { listRecurringIncomes, type RecurringIncome } from '@/db/incomes';
 import { listRecurring, type Recurring } from '@/db/recurring';
 import { daysBetween } from '@/lib/billing';
-import { toDay } from '@/lib/dates';
+import { formatDay, toDay } from '@/lib/dates';
+import { incomeKind } from '@/lib/income';
 import { formatCop } from '@/lib/money';
 import { remindersAllowed } from '@/lib/reminders';
 
@@ -24,14 +26,20 @@ export default function RecurringScreen() {
   const rail = useTabRail();
   const today = toDay(new Date());
   const [items, setItems] = useState<Recurring[]>([]);
+  const [incomes, setIncomes] = useState<RecurringIncome[]>([]);
   const [category, setCategory] = useState<string | null>(null);
   const [allowed, setAllowed] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([listRecurring(db, today), remindersAllowed()]).then(([rows, permission]) => {
+      Promise.all([
+        listRecurring(db, today),
+        remindersAllowed(),
+        listRecurringIncomes(db, today),
+      ]).then(([rows, permission, incomeRows]) => {
         setItems(rows);
+        setIncomes(incomeRows);
         setAllowed(permission);
         setLoaded(true);
       });
@@ -112,6 +120,18 @@ export default function RecurringScreen() {
         data={visible}
         keyExtractor={(item) => item.id.toString()}
         ListHeaderComponent={header}
+        ListFooterComponent={
+          incomes.length > 0 && category === null ? (
+            <View style={styles.incomes}>
+              <Text style={styles.incomeTitle}>Monthly income</Text>
+              <View style={styles.incomeList}>
+                {incomes.map((income, index) => (
+                  <IncomeRow key={income.id} income={income} last={index === incomes.length - 1} />
+                ))}
+              </View>
+            </View>
+          ) : undefined
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No recurring charges yet</Text>
@@ -188,7 +208,78 @@ function RecurringRow({
   );
 }
 
+function IncomeRow({ income, last }: { income: RecurringIncome; last: boolean }) {
+  const kind = incomeKind(income.kind);
+
+  return (
+    <PressableScale
+      accessibilityRole="button"
+      onPress={() => router.push(`/income/form?recurringId=${income.id}`)}
+      style={[styles.incomeRow, !last && styles.incomeDivider]}>
+      <CategoryTile icon={kind.icon} color={colors.income} tint={status.ok.background} />
+      <View style={styles.incomeText}>
+        <Text numberOfLines={1} style={styles.incomeName}>
+          {income.source}
+        </Text>
+        <Text style={styles.incomeDetail}>
+          Day {income.payDay}
+          {income.accountName ? ` · ${income.accountName}` : ''}
+        </Text>
+      </View>
+      <View style={styles.incomeAmount}>
+        <Text style={[styles.incomeName, styles.incomeValue]}>+{formatCop(income.amountCop)}</Text>
+        <Text style={styles.incomeDetail}>Next {formatDay(income.nextPayOn)}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
 const styles = StyleSheet.create({
+  incomes: {
+    gap: 10,
+    marginTop: 22,
+  },
+  incomeTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  incomeList: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    paddingHorizontal: 16,
+  },
+  incomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  incomeDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  incomeText: {
+    flex: 1,
+    gap: 2,
+  },
+  incomeAmount: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  incomeName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  incomeValue: {
+    color: colors.income,
+  },
+  incomeDetail: {
+    fontSize: 12,
+    color: colors.muted,
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.background,

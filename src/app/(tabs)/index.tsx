@@ -15,6 +15,7 @@ import { colors, radius, status } from '@/constants/theme';
 import { listAccounts, type Account } from '@/db/accounts';
 import { listCards, listDebitCards, type CardWithSummary } from '@/db/cards';
 import { listMonthTotals } from '@/db/expenses';
+import { monthIncomeTotal } from '@/db/incomes';
 import { listRecurring, type Recurring } from '@/db/recurring';
 import { getSetting, setSetting } from '@/db/settings';
 import { formatDay, greeting, toDay, toMonth } from '@/lib/dates';
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const [cards, setCards] = useState<CardWithSummary[]>([]);
   const [recurring, setRecurring] = useState<Recurring[]>([]);
   const [spentCop, setSpentCop] = useState(0);
+  const [incomeCop, setIncomeCop] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
   const [expiresOn, setExpiresOn] = useState<string | null>(null);
@@ -50,6 +52,7 @@ export default function HomeScreen() {
         getSetting(db, 'setupHidden'),
         getSetting(db, 'welcomed'),
         readInstallExpiry(),
+        monthIncomeTotal(db, month),
       ]).then(
         ([
           accountRows,
@@ -61,12 +64,14 @@ export default function HomeScreen() {
           hidden,
           welcomed,
           expiry,
+          income,
         ]) => {
           if (welcomed === null) router.replace('/welcome');
           setAccounts(accountRows);
           setCards(cardRows);
           setRecurring(recurringRows);
           setSpentCop(total);
+          setIncomeCop(income);
           setHasDebit(debitRows.length > 0);
           setName(savedName ?? '');
           setSetupHidden(hidden !== null);
@@ -187,6 +192,25 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.tileValue}>{formatCop(nextCard?.statement.balanceCop ?? 0)}</Text>
           </PressableScale>
+        </View>
+
+        <View style={styles.tiles}>
+          <PressableScale
+            accessibilityRole="button"
+            onPress={() => router.push(incomeCop > 0 ? '/expenses' : '/income/form')}
+            style={styles.tile}>
+            <Text style={styles.tileLabel}>Income this month</Text>
+            <Text style={[styles.tileValue, incomeCop > 0 && styles.income]}>
+              {incomeCop > 0 ? `+${formatCop(incomeCop)}` : 'Add income'}
+            </Text>
+          </PressableScale>
+          <View style={styles.tile}>
+            <Text style={styles.tileLabel}>Left this month</Text>
+            <Text style={[styles.tileValue, incomeCop - spentCop < 0 && styles.negative]}>
+              {incomeCop - spentCop < 0 ? '−' : ''}
+              {formatCop(Math.abs(incomeCop - spentCop))}
+            </Text>
+          </View>
         </View>
 
         {!setupHidden && missingSteps.length > 0 && (
@@ -335,6 +359,12 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: radius.card,
     backgroundColor: colors.surface,
+  },
+  income: {
+    color: colors.income,
+  },
+  negative: {
+    color: colors.danger,
   },
   tileLabel: {
     fontSize: 12,

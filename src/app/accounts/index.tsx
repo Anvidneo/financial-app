@@ -7,17 +7,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
-import { listAccounts, type Account } from '@/db/accounts';
+import { listAccountFlows, listAccounts, type Account, type AccountFlow } from '@/db/accounts';
+import { toDay, toMonth } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 
 export default function AccountsScreen() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [flows, setFlows] = useState<AccountFlow[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      listAccounts(db).then(setAccounts);
+      Promise.all([listAccounts(db), listAccountFlows(db, toMonth(toDay(new Date())))]).then(
+        ([accountRows, flowRows]) => {
+          setAccounts(accountRows);
+          setFlows(flowRows);
+        },
+      );
     }, [db]),
   );
 
@@ -63,9 +70,12 @@ export default function AccountsScreen() {
               accessibilityRole="button"
               onPress={() => router.push(`/accounts/form?id=${account.id}`)}
               style={[styles.row, index < accounts.length - 1 && styles.divider]}>
-              <Text numberOfLines={1} style={styles.name}>
-                {account.name}
-              </Text>
+              <View style={styles.nameColumn}>
+                <Text numberOfLines={1} style={styles.name}>
+                  {account.name}
+                </Text>
+                <FlowLine flow={flows.find((flow) => flow.accountId === account.id)} />
+              </View>
               <Text style={styles.balance}>{formatCop(account.balanceCop)}</Text>
             </PressableScale>
           ))}
@@ -73,14 +83,38 @@ export default function AccountsScreen() {
       )}
 
       <Text style={styles.hint}>
-        Expenses and card payments linked to an account lower its balance. Edit an account any time
-        to match your bank.
+        Income linked to an account raises its balance, and expenses and card payments lower it.
+        Edit an account any time to match your bank.
       </Text>
     </ScrollView>
   );
 }
 
+function FlowLine({ flow }: { flow?: AccountFlow }) {
+  if (!flow || (flow.inCop === 0 && flow.outCop === 0)) {
+    return <Text style={styles.flow}>No movements this month</Text>;
+  }
+  return (
+    <Text style={styles.flow}>
+      <Text style={styles.flowIn}>+{formatCop(flow.inCop)}</Text> · −{formatCop(flow.outCop)} this
+      month
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
+  nameColumn: {
+    flex: 1,
+    gap: 2,
+  },
+  flow: {
+    fontSize: 12,
+    color: colors.muted,
+    fontVariant: ['tabular-nums'],
+  },
+  flowIn: {
+    color: colors.income,
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.background,

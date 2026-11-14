@@ -128,6 +128,33 @@ export const MIGRATIONS = [
   ALTER TABLE recurring ADD COLUMN debit_card_id INTEGER REFERENCES debit_cards (id);
   ALTER TABLE recurring ADD COLUMN account_id INTEGER REFERENCES accounts (id);
   `,
+  `
+  CREATE TABLE recurring_incomes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    amount_cop INTEGER NOT NULL CHECK (amount_cop > 0),
+    kind TEXT NOT NULL DEFAULT 'other',
+    pay_day INTEGER NOT NULL CHECK (pay_day BETWEEN 1 AND 31),
+    account_id INTEGER REFERENCES accounts (id),
+    active INTEGER NOT NULL DEFAULT 1,
+    starts_on TEXT NOT NULL,
+    last_posted_on TEXT
+  );
+
+  CREATE TABLE incomes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    amount_cop INTEGER NOT NULL CHECK (amount_cop > 0),
+    kind TEXT NOT NULL DEFAULT 'other',
+    received_on TEXT NOT NULL,
+    account_id INTEGER REFERENCES accounts (id),
+    recurring_income_id INTEGER REFERENCES recurring_incomes (id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE UNIQUE INDEX incomes_recurring_day ON incomes (recurring_income_id, received_on);
+  CREATE INDEX incomes_received_on ON incomes (received_on);
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

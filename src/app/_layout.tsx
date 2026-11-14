@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Intro } from '@/components/intro';
 import { ScreenSkeleton } from '@/components/skeleton';
 import { colors } from '@/constants/theme';
+import { postDueIncomes } from '@/db/incomes';
 import { postDueCharges } from '@/db/recurring';
 import { migrate } from '@/db/schema';
 import { toDay } from '@/lib/dates';
@@ -24,6 +25,7 @@ function ChargeSync({ children }: { children: ReactNode }) {
       syncing.current = true;
       try {
         await postDueCharges(db, toDay(new Date()));
+        await postDueIncomes(db, toDay(new Date()));
         await syncReminders(db);
       } finally {
         syncing.current = false;
@@ -56,6 +58,7 @@ function Screens() {
         options={{ contentStyle: { backgroundColor: colors.background } }}
       />
       <Stack.Screen name="new-expense" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="income/form" options={{ presentation: 'modal' }} />
       <Stack.Screen name="expense/[id]" />
       <Stack.Screen name="accounts/index" />
       <Stack.Screen name="accounts/form" options={{ presentation: 'modal' }} />

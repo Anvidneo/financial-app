@@ -12,7 +12,7 @@ import { MonthBars } from '@/components/month-bars';
 import { Chip } from '@/components/chip';
 import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, status } from '@/constants/theme';
 import {
   listCategories,
   listDailyTotals,
@@ -22,6 +22,7 @@ import {
   type DayTotal,
   type Expense,
 } from '@/db/expenses';
+import { listIncomes, type Income } from '@/db/incomes';
 import {
   addMonths,
   daysOfMonth,
@@ -31,6 +32,7 @@ import {
   toDay,
   toMonth,
 } from '@/lib/dates';
+import { incomeKind } from '@/lib/income';
 import { formatCop } from '@/lib/money';
 import { paymentLabel } from '@/lib/payment';
 
@@ -43,6 +45,7 @@ export default function ExpensesScreen() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [monthTotals, setMonthTotals] = useState<number[]>([]);
   const chartMonths = useMemo(() => lastMonths(month, 5), [month]);
@@ -58,11 +61,13 @@ export default function ExpensesScreen() {
         listExpenses(db, month, categoryId),
         listMonthTotals(db, chartMonths, categoryId),
         listDailyTotals(db, chartDays, categoryId),
-      ]).then(([categoryRows, expenseRows, totals, daily]) => {
+        listIncomes(db, month),
+      ]).then(([categoryRows, expenseRows, totals, daily, incomeRows]) => {
         setCategories(categoryRows);
         setExpenses(expenseRows);
         setMonthTotals(totals);
         setDayTotals(daily);
+        setIncomes(incomeRows);
         setLoaded(true);
       });
     }, [db, month, categoryId, chartMonths, chartDays]),
@@ -72,6 +77,15 @@ export default function ExpensesScreen() {
     () => expenses.reduce((sum, expense) => sum + expense.amountCop, 0),
     [expenses],
   );
+
+  // Income has no category, so it only joins the list when no category filter is on.
+  const movements: Movement[] = [
+    ...expenses.map((expense) => ({ type: 'expense' as const, day: expense.spentOn, expense })),
+    ...(categoryId === null
+      ? incomes.map((income) => ({ type: 'income' as const, day: income.receivedOn, income }))
+      : []),
+  ].sort((a, b) => b.day.localeCompare(a.day));
+  const incomeCop = incomes.reduce((sum, income) => sum + income.amountCop, 0);
 
   const selected = dayTotals.find((day) => day.day === selectedDay) ?? null;
 
@@ -105,6 +119,9 @@ export default function ExpensesScreen() {
         <Text style={styles.total}>
           {formatCop(selected ? selected.cardCop + selected.otherCop : total)}
         </Text>
+        {!selected && incomeCop > 0 && categoryId === null && (
+          <Text style={styles.incomeLine}>+{formatCop(incomeCop)} income this month</Text>
+        )}
         <View style={styles.chartBar}>
           {view === 'days' ? <ChartLegend /> : <View />}
           <ViewToggle
@@ -146,7 +163,7 @@ export default function ExpensesScreen() {
         ))}
       </ScrollView>
 
-      {expenses.length > 0 && <Text style={styles.section}>Movements</Text>}
+      {movements.length > 0 && <Text style={styles.section}>Movements</Text>}
     </View>
   );
 
@@ -154,13 +171,21 @@ export default function ExpensesScreen() {
     <FadeInScreen>
       <View style={styles.screen}>
         <FlatList
-          data={expenses}
-          keyExtractor={(expense) => expense.id.toString()}
+          data={movements}
+          keyExtractor={(item) =>
+            item.type === 'expense' ? `e${item.expense.id}` : `i${item.income.id}`
+          }
           ListHeaderComponent={header}
           ListEmptyComponent={<EmptyMovements filtered={categoryId !== null} />}
-          renderItem={({ item, index }) => (
-            <ExpenseRow expense={item} first={index === 0} last={index === expenses.length - 1} />
-          )}
+          renderItem={({ item, index }) => {
+            const first = index === 0;
+            const last = index === movements.length - 1;
+            return item.type === 'expense' ? (
+              <ExpenseRow expense={item.expense} first={first} last={last} />
+            ) : (
+              <IncomeRow income={item.income} first={first} last={last} />
+            );
+          }}
           contentContainerStyle={{
             paddingTop: insets.top + 12,
             paddingBottom: rail.contentBottom,
@@ -217,6 +242,39 @@ function MonthButton({
       onPress={onPress}
       style={styles.monthButton}>
       <SymbolView name={icon} size={16} tintColor={disabled ? colors.control : colors.muted} />
+    </PressableScale>
+  );
+}
+
+type Movement =
+  | { type: 'expense'; day: string; expense: Expense }
+  | { type: 'income'; day: string; income: Income };
+
+function IncomeRow({ income, first, last }: { income: Income; first: boolean; last: boolean }) {
+  const kind = incomeKind(income.kind);
+
+  return (
+    <PressableScale
+      accessibilityRole="button"
+      onPress={() => router.push(`/income/form?id=${income.id}`)}
+      style={[styles.row, first && styles.rowFirst, last && styles.rowLast]}>
+      <View style={[styles.rowInner, !last && styles.rowDivider]}>
+        <CategoryTile icon={kind.icon} color={colors.income} tint={status.ok.background} />
+        <View style={styles.rowText}>
+          <Text numberOfLines={1} style={styles.rowName}>
+            {income.source}
+          </Text>
+          <Text style={styles.rowDetail}>
+            {kind.label}
+            {income.accountName ? ` · ${income.accountName}` : ''}
+            {income.recurringIncomeId ? <Text style={styles.recurring}> · Monthly</Text> : null}
+          </Text>
+        </View>
+        <View style={styles.rowAmount}>
+          <Text style={[styles.rowName, styles.incomeAmount]}>+{formatCop(income.amountCop)}</Text>
+          <Text style={styles.rowDetail}>{formatDay(income.receivedOn)}</Text>
+        </View>
+      </View>
     </PressableScale>
   );
 }
@@ -426,6 +484,14 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     color: colors.muted,
+  },
+  incomeAmount: {
+    color: colors.income,
+  },
+  incomeLine: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.income,
   },
   recurring: {
     color: colors.recurring,

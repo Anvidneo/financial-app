@@ -11,9 +11,11 @@ import { PressableScale } from '@/components/pressable-scale';
 import { colors, radius } from '@/constants/theme';
 import { createBackup, restoreBackup } from '@/db/backup';
 import { listAllExpenses } from '@/db/expenses';
+import { listAllIncomes } from '@/db/incomes';
 import { getSetting, setSetting } from '@/db/settings';
 import { toCsv } from '@/lib/csv';
 import { formatDay, toDay } from '@/lib/dates';
+import { incomeKind } from '@/lib/income';
 import { readInstallExpiry } from '@/lib/install';
 import { paymentLabel } from '@/lib/payment';
 import { syncReminders } from '@/lib/reminders';
@@ -58,16 +60,36 @@ export default function SettingsScreen() {
 
   function exportCsv() {
     run('Export failed', async () => {
-      const expenses = await listAllExpenses(db);
-      const rows = expenses.map((expense) => [
-        expense.spentOn,
-        expense.merchant,
-        expense.amountCop,
-        expense.categoryName,
-        paymentLabel(expense.paymentMethod, expense.cardLabel) ?? '',
-        expense.installments,
-      ]);
-      const header = ['Date', 'Merchant', 'Amount COP', 'Category', 'Paid with', 'Installments'];
+      const [expenses, incomes] = await Promise.all([listAllExpenses(db), listAllIncomes(db)]);
+      const rows = [
+        ...expenses.map((expense) => [
+          expense.spentOn,
+          'Expense',
+          expense.merchant,
+          expense.amountCop,
+          expense.categoryName,
+          paymentLabel(expense.paymentMethod, expense.cardLabel) ?? '',
+          expense.installments,
+        ]),
+        ...incomes.map((income) => [
+          income.receivedOn,
+          'Income',
+          income.source,
+          income.amountCop,
+          incomeKind(income.kind).label,
+          income.accountName ?? '',
+          '',
+        ]),
+      ].sort((a, b) => String(b[0]).localeCompare(String(a[0])));
+      const header = [
+        'Date',
+        'Type',
+        'Name',
+        'Amount COP',
+        'Category',
+        'Paid with or received in',
+        'Installments',
+      ];
       await shareFile(`movements-${toDay(new Date())}.csv`, toCsv([header, ...rows]));
     });
   }

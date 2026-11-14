@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { listAccounts } from './accounts.ts';
 import { createBackup, restoreBackup } from './backup.ts';
 import { MIGRATIONS } from './schema.ts';
 
@@ -42,11 +43,19 @@ function seed(sql: DatabaseSync) {
     INSERT INTO expenses (merchant, amount_cop, category_id, spent_on, card_id, installments, recurring_id)
       VALUES ('Laptop', 1200000, 5, '2026-10-12', 1, 12, 1);
     INSERT INTO card_statements (card_id, cut_off_on, paid_on) VALUES (1, '2026-10-30', '2026-11-01');
+    INSERT INTO recurring_incomes (source, amount_cop, kind, pay_day, account_id, starts_on)
+      VALUES ('Salary', 4000000, 'salary', 30, 1, '2026-10-30');
+    INSERT INTO incomes (source, amount_cop, kind, received_on, account_id, recurring_income_id)
+      VALUES ('Salary', 4000000, 'salary', '2026-10-30', 1, 1);
   `);
 }
 
 const count = (sql: DatabaseSync, table: string) =>
-  (sql.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get() as { total: number }).total;
+  (
+    sql.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get() as {
+      total: number;
+    }
+  ).total;
 
 test('a backup restores every table into an empty app', async () => {
   const source = openDatabase();
@@ -56,7 +65,15 @@ test('a backup restores every table into an empty app', async () => {
   const target = openDatabase();
   await restoreBackup(target.db, backup);
 
-  for (const table of ['cards', 'accounts', 'recurring', 'expenses', 'card_statements']) {
+  for (const table of [
+    'cards',
+    'accounts',
+    'recurring',
+    'expenses',
+    'card_statements',
+    'recurring_incomes',
+    'incomes',
+  ]) {
     assert.equal(count(target.sql, table), 1, table);
   }
   assert.equal(count(target.sql, 'categories'), 6);
@@ -111,4 +128,26 @@ test('a backup from an older version still restores', async () => {
 
   assert.equal(count(target.sql, 'expenses'), 1);
   assert.equal(count(target.sql, 'settings'), 1);
+});
+
+test('income adds to the account balance and spending subtracts', async () => {
+  const { sql, db } = openDatabase();
+  seed(sql);
+  sql.exec(`INSERT INTO expenses (merchant, amount_cop, category_id, spent_on, account_id)
+            VALUES ('Market', 250000, 1, '2026-11-02', 1)`);
+
+  const [account] = await listAccounts(db);
+  assert.equal(account.balanceCop, 3250000 + 4000000 - 250000);
+});
+
+test('a backup without income restores and clears old income', async () => {
+  const source = openDatabase();
+  seed(source.sql);
+  const backup = JSON.parse(await createBackup(source.db));
+  delete backup.tables.incomes;
+  delete backup.tables.recurring_incomes;
+
+  await restoreBackup(source.db, JSON.stringify(backup));
+  assert.equal(count(source.sql, 'incomes'), 0);
+  assert.equal(count(source.sql, 'expenses'), 1);
 });
