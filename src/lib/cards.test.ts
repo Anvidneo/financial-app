@@ -73,7 +73,15 @@ test('buildSchedule keeps the cut-off day after February', () => {
 test('summarizeCard shows the closed statement with one installment of each purchase', () => {
   const summary = summarizeCard(
     cycle,
-    [purchase({}), purchase({ id: 2, merchant: 'Restaurant', amountCop: 96000, installments: 1 })],
+    [
+      purchase({}),
+      purchase({
+        id: 2,
+        merchant: 'Restaurant',
+        amountCop: 96000,
+        installments: 1,
+      }),
+    ],
     [{ cutOffOn: '2026-10-30', minimumCop: 50000, paidOn: null }],
     '2026-10-31',
   );
@@ -118,7 +126,10 @@ test('interest is charged on the remaining balance', () => {
     schedule.map((item) => item.amountCop),
     [424000, 416000, 408000],
   );
-  assert.equal(schedule.reduce((sum, item) => sum + item.capitalCop, 0), 1200000);
+  assert.equal(
+    schedule.reduce((sum, item) => sum + item.capitalCop, 0),
+    1200000,
+  );
 });
 
 test('a single payment has no interest', () => {
@@ -140,7 +151,14 @@ test('a partial payment lowers the balance and keeps the statement open', () => 
   const summary = summarizeCard(
     cycle,
     [purchase({ amountCop: 300000, installments: 1 })],
-    [{ cutOffOn: '2026-10-30', minimumCop: null, paidOn: null, paidCop: 100000 }],
+    [
+      {
+        cutOffOn: '2026-10-30',
+        minimumCop: null,
+        paidOn: null,
+        paidCop: 100000,
+      },
+    ],
     '2026-10-31',
   );
   assert.equal(summary.statement.totalCop, 300000);
@@ -155,4 +173,25 @@ test('a card with no purchases shows the open cycle at zero', () => {
   assert.equal(summary.statement.balanceCop, 0);
   assert.equal(summary.statement.cutOffOn, '2026-11-30');
   assert.equal(summary.availableCop, 6000000);
+});
+
+test('purchases after an unpaid statement show in the open cycle', () => {
+  const summary = summarizeCard(
+    cycle,
+    [
+      purchase({ amountCop: 300000, installments: 1, spentOn: '2026-10-18' }),
+      purchase({ amountCop: 52800, installments: 1, spentOn: '2026-11-07' }),
+    ],
+    [],
+    '2026-11-14',
+  );
+  assert.equal(summary.statement.cutOffOn, '2026-10-30');
+  assert.equal(summary.statement.items.length, 1);
+  assert.equal(summary.openCycle?.cutOffOn, '2026-11-30');
+  assert.equal(summary.openCycle?.totalCop, 52800);
+});
+
+test('an open statement has no separate open cycle', () => {
+  const summary = summarizeCard(cycle, [purchase({ spentOn: '2026-11-07' })], [], '2026-11-14');
+  assert.equal(summary.openCycle, null);
 });

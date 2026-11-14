@@ -9,6 +9,7 @@ import { PressableScale } from '@/components/pressable-scale';
 import { FadeInScreen, ScreenSkeleton } from '@/components/skeleton';
 import { colors, radius } from '@/constants/theme';
 import { getCard, setStatementMinimum, type CardWithSummary } from '@/db/cards';
+import type { StatementItem } from '@/lib/cards';
 import { formatDay, toDay } from '@/lib/dates';
 import { formatCop } from '@/lib/money';
 
@@ -132,41 +133,93 @@ export default function CardDetailScreen() {
           </PressableScale>
         )}
 
-        {statement.items.length > 0 ? (
-          <>
-            <Text style={styles.section}>Movements</Text>
-            <View style={styles.list}>
-              {statement.items.map((item, index) => (
-                <PressableScale
-                  key={`${item.purchaseId}-${item.number}`}
-                  accessibilityRole="button"
-                  onPress={() => router.push(`/expense/${item.purchaseId}`)}
-                  style={[styles.row, index < statement.items.length - 1 && styles.divider]}>
-                  <View style={styles.rowText}>
-                    <Text numberOfLines={1} style={styles.rowName}>
-                      {item.merchant}
-                    </Text>
-                    <Text style={styles.rowDetail}>
-                      {item.count === 1
-                        ? '1 installment'
-                        : `Installment ${item.number} of ${item.count}`}{' '}
-                      · {formatDay(item.spentOn)}
-                    </Text>
-                  </View>
-                  <Text style={styles.rowName}>{formatCop(item.amountCop)}</Text>
-                </PressableScale>
-              ))}
-            </View>
-          </>
-        ) : (
+        {statement.items.length === 0 && !card.openCycle ? (
           <Text style={styles.nothing}>No movements in this cycle.</Text>
+        ) : (
+          <>
+            {statement.items.length > 0 && (
+              <MovementList
+                title={
+                  statement.closed ? `Statement · ${formatDay(statement.cutOffOn)}` : 'Movements'
+                }
+                items={statement.items}
+              />
+            )}
+            {card.openCycle && (
+              <MovementList
+                title={`Current cycle · closes ${formatDay(card.openCycle.cutOffOn)}`}
+                totalCop={card.openCycle.totalCop}
+                items={card.openCycle.items}
+                empty="No purchases since the statement closed."
+              />
+            )}
+          </>
         )}
       </ScrollView>
     </FadeInScreen>
   );
 }
 
+function MovementList({
+  title,
+  items,
+  totalCop,
+  empty,
+}: {
+  title: string;
+  items: StatementItem[];
+  totalCop?: number;
+  empty?: string;
+}) {
+  return (
+    <>
+      <View style={styles.sectionRow}>
+        <Text style={styles.section}>{title}</Text>
+        {totalCop !== undefined && <Text style={styles.sectionTotal}>{formatCop(totalCop)}</Text>}
+      </View>
+      {items.length === 0 ? (
+        <Text style={styles.nothing}>{empty}</Text>
+      ) : (
+        <View style={styles.list}>
+          {items.map((item, index) => (
+            <PressableScale
+              key={`${item.purchaseId}-${item.number}`}
+              accessibilityRole="button"
+              onPress={() => router.push(`/expense/${item.purchaseId}`)}
+              style={[styles.row, index < items.length - 1 && styles.divider]}>
+              <View style={styles.rowText}>
+                <Text numberOfLines={1} style={styles.rowName}>
+                  {item.merchant}
+                </Text>
+                <Text style={styles.rowDetail}>
+                  {item.count === 1
+                    ? '1 installment'
+                    : `Installment ${item.number} of ${item.count}`}{' '}
+                  · {formatDay(item.spentOn)}
+                </Text>
+              </View>
+              <Text style={styles.rowName}>{formatCop(item.amountCop)}</Text>
+            </PressableScale>
+          ))}
+        </View>
+      )}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sectionTotal: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.muted,
+    fontVariant: ['tabular-nums'],
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.background,

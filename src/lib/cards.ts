@@ -49,8 +49,16 @@ export type Statement = {
   items: StatementItem[];
 };
 
+export type OpenCycle = {
+  cutOffOn: string;
+  totalCop: number;
+  items: StatementItem[];
+};
+
 export type CardSummary = {
   statement: Statement;
+  // Purchases since the shown statement closed, so they are never hidden behind it.
+  openCycle: OpenCycle | null;
   usedCop: number;
   availableCop: number;
 };
@@ -131,10 +139,7 @@ export function summarizeCard(
   const partialCop = records
     .filter((record) => record.paidOn === null)
     .reduce((sum, record) => sum + (record.paidCop ?? 0), 0);
-  const usedCop = Math.max(
-    unpaid.reduce((sum, item) => sum + item.capitalCop, 0) - partialCop,
-    0,
-  );
+  const usedCop = Math.max(unpaid.reduce((sum, item) => sum + item.capitalCop, 0) - partialCop, 0);
   const oldestClosed = unpaid
     .map((item) => item.cutOffOn)
     .filter((cutOffOn) => cutOffOn < today)
@@ -144,6 +149,10 @@ export function summarizeCard(
   const record = records.find((row) => row.cutOffOn === cutOffOn);
   const totalCop = statementItems.reduce((sum, item) => sum + item.amountCop, 0);
   const paidCop = record?.paidCop ?? 0;
+  const openCutOffOn = cutOffFor(today, cycle.cutOffDay);
+  const openItems = unpaid.filter(
+    (item) => item.cutOffOn > cutOffOn && item.cutOffOn <= openCutOffOn,
+  );
 
   return {
     statement: {
@@ -156,6 +165,14 @@ export function summarizeCard(
       closed: cutOffOn < today,
       items: statementItems,
     },
+    openCycle:
+      cutOffOn < today
+        ? {
+            cutOffOn: openCutOffOn,
+            totalCop: openItems.reduce((sum, item) => sum + item.amountCop, 0),
+            items: openItems,
+          }
+        : null,
     usedCop,
     availableCop: cycle.limitCop - usedCop,
   };
