@@ -54,9 +54,9 @@ export default function SettingsScreen() {
   );
 
   // Reports its own failure, so callers can start it from a tap without awaiting it.
-  function run(failure: string, task: () => Promise<void>): Promise<void> {
+  function run(failure: string, task: () => Promise<void>): void {
     setBusy(true);
-    return task()
+    task()
       .finally(() => setBusy(false))
       .catch(reportFailure(failure));
   }
@@ -104,8 +104,8 @@ export default function SettingsScreen() {
     });
   }
 
-  async function restore(uri: string) {
-    await run('Restore failed', async () => {
+  function restore(uri: string) {
+    run('Restore failed', async () => {
       await restoreBackup(db, await new File(uri).text());
       await syncReminders(db);
       Alert.alert('Backup restored', 'Your data now matches the backup.');
