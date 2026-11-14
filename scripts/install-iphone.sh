@@ -15,7 +15,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PROFILES="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 grep -l "$BUNDLE_ID" "$PROFILES"/*.mobileprovision 2>/dev/null | while read -r profile; do rm "$profile"; done
 
-[ -d "$ROOT/ios" ] || (cd "$ROOT" && npx expo prebuild --platform ios)
+[ -d "$ROOT/ios" ] || (cd "$ROOT" && ./node_modules/.bin/expo prebuild --platform ios)
 
 cd "$ROOT/ios"
 xcodebuild \

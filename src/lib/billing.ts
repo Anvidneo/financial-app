@@ -50,7 +50,12 @@ export function daysBetween(from: string, to: string): number {
 }
 
 export function latestDay(...days: (string | null)[]): string {
-  return days.filter((day): day is string => day !== null).sort().at(-1) ?? '';
+  return (
+    days
+      .filter((day): day is string => day !== null)
+      .sort((a, b) => a.localeCompare(b))
+      .at(-1) ?? ''
+  );
 }
 
 // iOS keeps 64 pending notifications, so each charge plans only its next few reminders.

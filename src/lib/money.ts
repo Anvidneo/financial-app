@@ -1,7 +1,12 @@
 const MAX_DIGITS = 12;
 
 export function formatCop(amount: number): string {
-  const digits = Math.abs(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const plain = Math.abs(amount).toString();
+  let digits = '';
+  for (let index = 0; index < plain.length; index += 1) {
+    if (index > 0 && (plain.length - index) % 3 === 0) digits += '.';
+    digits += plain[index];
+  }
   return `${amount < 0 ? '-' : ''}$${digits}`;
 }
 

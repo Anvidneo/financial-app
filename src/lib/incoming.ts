@@ -11,9 +11,13 @@ export function lastFourDigits(text: string | undefined): string | null {
 }
 
 // Banks word their messages differently, so this only looks for an amount and "en <merchant>".
-export function parseBankMessage(text: string | undefined): { amountCop: number; merchant: string } {
+export function parseBankMessage(text: string | undefined): {
+  amountCop: number;
+  merchant: string;
+} {
   const message = text ?? '';
   const amount = message.match(/\$\s?([\d.,]+\d)/)?.[1];
-  const merchant = message.match(/\ben\s+([^\n.,]+?)(?:\s+(?:el|por|con|a las)\b|[.,\n]|$)/i)?.[1];
+  // Cutting at the words that follow a merchant keeps the pattern linear on long messages.
+  const merchant = message.match(/\ben\s+([^\n.,]+)/i)?.[1]?.split(/\s+(?:el|por|con|a las)\b/i)[0];
   return { amountCop: parseAmount(amount), merchant: merchant?.trim() ?? '' };
 }

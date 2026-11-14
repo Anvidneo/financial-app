@@ -143,7 +143,7 @@ export function summarizeCard(
   const oldestClosed = unpaid
     .map((item) => item.cutOffOn)
     .filter((cutOffOn) => cutOffOn < today)
-    .sort()[0];
+    .sort((a, b) => a.localeCompare(b))[0];
   const cutOffOn = oldestClosed ?? cutOffFor(today, cycle.cutOffDay);
   const statementItems = unpaid.filter((item) => item.cutOffOn === cutOffOn);
   const record = records.find((row) => row.cutOffOn === cutOffOn);
