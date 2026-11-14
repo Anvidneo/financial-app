@@ -20,6 +20,6 @@ export function parseBankMessage(text: string | undefined): {
   // The merchant starts at its first visible character, so the spaces before it match only once.
   const merchant = message
     .match(/\ben\s+([^\s.,][^\n.,]*)/i)?.[1]
-    ?.split(/\s+(?:el|por|con|a las)\b/i)[0];
+    ?.split(/\s(?:el|por|con|a las)\b/i)[0];
   return { amountCop: parseAmount(amount), merchant: merchant?.trim() ?? '' };
 }
