@@ -29,4 +29,7 @@ xcodebuild \
   -quiet
 
 xcrun devicectl device install app --device "$DEVICE" build/Build/Products/Release-iphoneos/Finance.app
-xcrun devicectl device process launch --device "$DEVICE" "$BUNDLE_ID"
+# Opening fails while the phone is locked, but the app is already installed by then.
+[ -n "${NO_LAUNCH:-}" ] ||
+  xcrun devicectl device process launch --device "$DEVICE" "$BUNDLE_ID" ||
+  echo "Installed. Unlock the iPhone and open Finance."

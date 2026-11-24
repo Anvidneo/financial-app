@@ -76,6 +76,8 @@ You need a Mac, Xcode, Node.js and an iPhone. A free Apple ID is enough, so ther
 
 > [!IMPORTANT]
 > Installs from a free Apple ID stop opening after 7 days. Run `npm run ios:device` again, right over the app. **Never delete the app first, because that erases your data.** Finance warns you before it expires.
+>
+> To renew it automatically every week, see [Automatic reinstall](docs/AUTO-REINSTALL.md).
 
 Prefer the Simulator? Run `npm run ios`.
 
